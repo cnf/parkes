@@ -1,0 +1,7 @@
+.devenv/
+.devenv.flake.nix
+__pycache__/
+*.pyc
+.env
+/data/
+.claude/
