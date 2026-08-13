@@ -38,6 +38,14 @@ app.include_router(tracking_router)
 app.include_router(satdump_router)
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
+
+@app.middleware("http")
+async def no_cache_static(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 templates = Jinja2Templates(directory=WEB_DIR / "templates")
 
 

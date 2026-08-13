@@ -2,74 +2,278 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ app_name }}</title>
     <style>
-      body { font-family: sans-serif; max-width: 32rem; margin: 2rem auto; }
-      .jog-grid { display: grid; grid-template-columns: repeat(3, 3rem); gap: 0.25rem; margin: 1rem 0; }
-      .jog-grid button { font-size: 1.25rem; }
-      #rotator-status, #tracking-status, #satdump-status { color: #666; font-size: 0.9rem; }
-      table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-      th, td { text-align: left; padding: 0.25rem 0.5rem; border-bottom: 1px solid #ddd; }
-      #satdump-objects { width: 100%; height: 10rem; font-family: monospace; box-sizing: border-box; }
-      #satdump-log { width: 100%; height: 12rem; overflow-y: auto; background: #111; color: #ddd;
-        font-family: monospace; font-size: 0.8rem; padding: 0.5rem; box-sizing: border-box; white-space: pre-wrap; }
+      :root {
+        --accent: #ff6700;
+        --accent-hover: #e05c00;
+        --accent2: #0091ea;
+        --accent2-hover: #0077c2;
+        --bg: #f6f6f7;
+        --surface: #ffffff;
+        --border: #e3e3e6;
+        --text: #1a1a1e;
+        --text-muted: #6b6b72;
+        --success: #16a34a;
+        --danger: #dc2626;
+        --radius: 12px;
+        --shadow: 0 1px 2px rgba(20, 20, 20, 0.04), 0 4px 16px rgba(20, 20, 20, 0.05);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #17181b;
+          --surface: #1f2024;
+          --border: #2d2e33;
+          --text: #f1f1f2;
+          --text-muted: #97979d;
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 16px rgba(0, 0, 0, 0.25);
+        }
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 4rem;
+        line-height: 1.45;
+      }
+
+      header { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 1.75rem; }
+      header .dots { display: inline-flex; gap: 0.3rem; }
+      header .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+      header .dot.dot2 { background: var(--accent2); }
+      h1 { font-size: 1.4rem; margin: 0; }
+      header p { margin: 0; color: var(--text-muted); font-size: 0.85rem; }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 1.35rem 1.5rem 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+      .card h2 {
+        margin: 0;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+      }
+      .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.1rem; }
+
+      .status-pill { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--text-muted); }
+      .status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--text-muted); transition: background 0.2s; }
+      .status-dot.on { background: var(--success); }
+      .status-dot.error { background: var(--danger); }
+
+      button {
+        font: inherit;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        padding: 0.45rem 0.95rem;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.15s, color 0.15s, background 0.15s, opacity 0.15s;
+      }
+      button:hover:not(:disabled) { border-color: var(--accent2); color: var(--accent2); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button:focus-visible { outline: 2px solid var(--accent2); outline-offset: 1px; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+      button.primary:disabled { opacity: 0.35; }
+      button.btn-sm { padding: 0.25rem 0.65rem; font-size: 0.8rem; }
+
+      .position-row { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: 1.4rem; }
+      .position-col { flex: 1 1 14rem; min-width: 14rem; }
+      .position-col.elevation-col { flex: 0 0 auto; width: 11rem; min-width: 0; }
+      .position-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); text-align: center; margin-bottom: 0.25rem; }
+
+      .heading-value { text-align: center; font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-bottom: 0.4rem; }
+      .heading-value .unit { font-size: 1rem; color: var(--text-muted); font-weight: normal; }
+
+      .compass { position: relative; height: 3.4rem; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+      .compass-marker {
+        position: absolute; left: 50%; top: 0; width: 0; height: 0; z-index: 2;
+        border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid var(--accent2);
+        transform: translateX(-5px);
+      }
+      .compass-ticks { position: absolute; inset: 0; }
+      .compass-tick { position: absolute; top: 0.65rem; }
+      .compass-tick .line { position: absolute; top: 0; left: 0; width: 1px; height: 0.5rem; background: var(--border); transform: translateX(-0.5px); }
+      .compass-tick.major .line { height: 0.85rem; background: var(--text-muted); }
+      .compass-tick.cardinal .line { height: 1.05rem; width: 2px; background: var(--accent); transform: translateX(-1px); }
+      .compass-tick .label { position: absolute; top: 0.95rem; left: 0; transform: translateX(-50%); font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; }
+      .compass-tick.cardinal .label { color: var(--accent); font-weight: 700; }
+
+      .elevation-widget { width: 11rem; margin: 0 auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); padding: 0.4rem; }
+      .elevation-widget svg { display: block; width: 100%; height: auto; }
+      .elevation-scale line { stroke: var(--text-muted); stroke-width: 2; }
+      .elevation-scale text { fill: var(--text-muted); font-size: 13px; text-anchor: middle; dominant-baseline: middle; }
+      #elevation-dish-group .elevation-dish { stroke: var(--accent2); stroke-width: 8; fill: none; stroke-linecap: round; }
+      #elevation-dish-group .elevation-boresight { stroke: var(--accent2); stroke-width: 5; stroke-linecap: round; }
+
+      .control-row { display: flex; gap: 1.75rem; align-items: flex-start; flex-wrap: wrap; }
+      .control-side { display: flex; flex-direction: column; gap: 0.6rem; flex: 1 1 12rem; min-width: 12rem; }
+      .btn-block { width: 100%; }
+
+      .jog-grid { display: grid; grid-template-columns: repeat(3, 3rem); grid-template-rows: repeat(3, 3rem); gap: 0.4rem; }
+      .jog-grid button { width: 3rem; height: 3rem; border-radius: 50%; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; padding: 0; }
+
+      #goto-form { display: flex; flex-direction: column; gap: 0.6rem; }
+      .goto-fields { display: flex; gap: 0.6rem; }
+      .goto-fields label { flex: 1; min-width: 0; }
+      label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--text-muted); }
+
+      input[type="number"], textarea {
+        font: inherit;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.4rem 0.6rem;
+        width: 100%;
+      }
+      input:focus, textarea:focus { outline: 2px solid var(--accent2); outline-offset: 1px; }
+
+      table { border-collapse: collapse; width: 100%; }
+      th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+      td { padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+      tr:last-child td { border-bottom: none; }
+
+      .badge { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+      .badge.up { background: rgba(22, 163, 74, 0.14); color: var(--success); }
+      .badge.down { background: rgba(107, 107, 114, 0.14); color: var(--text-muted); }
+
+      .field-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem; }
+      #satdump-objects { width: 100%; height: 10rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82rem; resize: vertical; }
+      #satdump-log {
+        width: 100%; height: 13rem; overflow-y: auto; margin: 0;
+        background: #0d0e10; color: #d7d7da; border: 1px solid var(--border); border-radius: 8px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; line-height: 1.5;
+        padding: 0.75rem; white-space: pre-wrap;
+      }
+
+      .row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
+      .divider { border: none; border-top: 1px solid var(--border); margin: 1.1rem 0; }
     </style>
   </head>
   <body>
-    <h1>{{ app_name }}</h1>
+    <header>
+      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
+      <h1>{{ app_name }}</h1>
+    </header>
 
-    <h2>Rotator</h2>
-    <p>
-      Az: <span id="rotator-az">--</span>&deg;
-      El: <span id="rotator-el">--</span>&deg;
-      <span id="rotator-status"></span>
-    </p>
+    <section class="card">
+      <div class="card-header">
+        <h2>Rotator</h2>
+        <span class="status-pill"><span class="status-dot" id="rotator-dot"></span><span id="rotator-status"></span></span>
+      </div>
 
-    <div class="jog-grid">
-      <span></span>
-      <button data-jog="up">&uarr;</button>
-      <span></span>
-      <button data-jog="left">&larr;</button>
-      <span></span>
-      <button data-jog="right">&rarr;</button>
-      <span></span>
-      <button data-jog="down">&darr;</button>
-      <span></span>
-    </div>
+      <div class="position-row">
+        <div class="position-col">
+          <div class="position-label">Azimuth</div>
+          <p class="heading-value"><span id="rotator-heading">--</span><span class="unit">&deg;</span></p>
+          <div class="compass" id="rotator-compass">
+            <div class="compass-marker"></div>
+            <div class="compass-ticks" id="compass-ticks"></div>
+          </div>
+        </div>
+        <div class="position-col elevation-col">
+          <div class="position-label">Elevation</div>
+          <p class="heading-value"><span id="rotator-el">--</span><span class="unit">&deg;</span></p>
+          <div class="elevation-widget">
+            <svg viewBox="0 0 200 200" aria-label="Elevation indicator">
+              <g class="elevation-scale">
+                <line x1="120" y1="140" x2="132" y2="140" />
+                <text x="140" y="140">0&deg;</text>
+                <line x1="111.96" y1="110" x2="122.35" y2="104" />
+                <text x="129.28" y="100">30&deg;</text>
+                <line x1="90" y1="88.04" x2="96" y2="77.65" />
+                <text x="100" y="70.72">60&deg;</text>
+                <line x1="60" y1="80" x2="60" y2="68" />
+                <text x="60" y="60">90&deg;</text>
+              </g>
+              <g id="elevation-dish-group">
+                <path class="elevation-dish" d="M 60 90 Q 25 140 60 190" />
+                <line class="elevation-boresight" x1="60" y1="140" x2="78" y2="140" />
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
 
-    <p><button id="park-btn">Park</button></p>
+      <hr class="divider" />
 
-    <form id="goto-form">
-      <label>Az <input id="goto-az" type="number" step="0.1" value="0" required /></label>
-      <label>El <input id="goto-el" type="number" step="0.1" value="0" required /></label>
-      <button type="submit">Go</button>
-    </form>
+      <div class="control-row">
+        <div class="jog-grid">
+          <span></span>
+          <button data-jog="up">&uarr;</button>
+          <span></span>
+          <button data-jog="left">&larr;</button>
+          <span></span>
+          <button data-jog="right">&rarr;</button>
+          <span></span>
+          <button data-jog="down">&darr;</button>
+          <span></span>
+        </div>
 
-    <h2>Sky Tracking</h2>
-    <p>
-      <span id="tracking-status"></span>
-      <button id="stop-tracking-btn" disabled>Stop tracking</button>
-    </p>
-    <table>
-      <thead>
-        <tr><th>Target</th><th>Az</th><th>El</th><th>Status</th><th></th></tr>
-      </thead>
-      <tbody id="targets-body"></tbody>
-    </table>
+        <div class="control-side">
+          <button id="park-btn" class="btn-block">Park</button>
+          <form id="goto-form">
+            <div class="goto-fields">
+              <label>Az <input id="goto-az" type="number" step="0.1" value="0" required /></label>
+              <label>El <input id="goto-el" type="number" step="0.1" value="0" required /></label>
+            </div>
+            <button type="submit" class="primary btn-block">Go</button>
+          </form>
+        </div>
+      </div>
+    </section>
 
-    <h2>Satdump Autotrack</h2>
-    <p>
-      <span id="satdump-status"></span>
-      <button id="satdump-start-btn">Start</button>
-      <button id="satdump-stop-btn" disabled>Stop</button>
-    </p>
-    <p>
-      Tracked objects (JSON):<br />
-      <textarea id="satdump-objects"></textarea><br />
-      <button id="satdump-save-objects-btn">Save objects</button>
-      <span id="satdump-objects-status"></span>
-    </p>
-    <pre id="satdump-log"></pre>
+    <section class="card">
+      <div class="card-header">
+        <h2>Sky Tracking</h2>
+        <span class="status-pill"><span class="status-dot" id="tracking-dot"></span><span id="tracking-status"></span></span>
+      </div>
+      <div class="row">
+        <button id="stop-tracking-btn" disabled>Stop tracking</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Target</th><th>Az</th><th>El</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody id="targets-body"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Satdump Autotrack</h2>
+        <span class="status-pill"><span class="status-dot" id="satdump-dot"></span><span id="satdump-status"></span></span>
+      </div>
+      <div class="row">
+        <button id="satdump-start-btn" class="primary">Start</button>
+        <button id="satdump-stop-btn" disabled>Stop</button>
+      </div>
+      <div class="field-label">Tracked objects (JSON)</div>
+      <textarea id="satdump-objects"></textarea>
+      <div class="row" style="margin-top: 0.6rem;">
+        <button id="satdump-save-objects-btn">Save objects</button>
+        <span id="satdump-objects-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+
+      <hr class="divider" />
+
+      <pre id="satdump-log"></pre>
+    </section>
 
     <script src="/static/rotator.js"></script>
     <script src="/static/tracking.js"></script>
