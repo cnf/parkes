@@ -13,17 +13,17 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from pidish.api.rotator import router as rotator_router
-from pidish.api.satdump import router as satdump_router
-from pidish.api.tracking import router as tracking_router
-from pidish.config import settings
-from pidish.rotator.rotctld_client import RotctldClient
-from pidish.satdump.process import AutotrackProcess
-from pidish.tracking.groups import GroupStore
-from pidish.tracking.scheduler import TrackingScheduler
-from pidish.tracking.sky import SkyTracker
-from pidish.tracking.tle import TleCatalog
-from pidish.tracking.tle_sources import TleSourceStore
+from parkes.api.rotator import router as rotator_router
+from parkes.api.satdump import router as satdump_router
+from parkes.api.tracking import router as tracking_router
+from parkes.config import settings
+from parkes.rotator.rotctld_client import RotctldClient
+from parkes.satdump.process import AutotrackProcess
+from parkes.tracking.groups import GroupStore
+from parkes.tracking.scheduler import TrackingScheduler
+from parkes.tracking.sky import SkyTracker
+from parkes.tracking.tle import TleCatalog
+from parkes.tracking.tle_sources import TleSourceStore
 
 logger = logging.getLogger(__name__)
 

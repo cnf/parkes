@@ -4,7 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from pidish.rotator.rotctld_client import RotctldClient, RotctldError
+from parkes.rotator.rotctld_client import RotctldClient, RotctldError
 
 router = APIRouter(prefix="/api/rotator", tags=["rotator"])
 

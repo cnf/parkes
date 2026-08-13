@@ -4,8 +4,8 @@ from pathlib import Path
 
 from skyfield.api import EarthSatellite, Loader
 
-from pidish.config import settings
-from pidish.tracking.tle_sources import TleSourceStore
+from parkes.config import settings
+from parkes.tracking.tle_sources import TleSourceStore
 
 logger = logging.getLogger(__name__)
 

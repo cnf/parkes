@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pidish.config import settings
+from parkes.config import settings
 
 # Seeded on first run only -- after that the file is the source of truth
 # and the user can add/remove whatever URLs they want.

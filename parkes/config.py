@@ -2,9 +2,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="PIDISH_", env_file=".env")
+    model_config = SettingsConfigDict(env_prefix="PARKES_", env_file=".env")
 
-    app_name: str = "PiDish"
+    app_name: str = "Parkes"
 
     # rotctld (Hamlib) bridges this app to the EasyCommII serial hardware.
     rotctld_host: str = "localhost"

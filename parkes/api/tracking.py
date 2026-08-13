@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from pidish.tracking.groups import GroupStore
-from pidish.tracking.scheduler import TrackingScheduler
-from pidish.tracking.sky import SkyTracker
-from pidish.tracking.tle import TleCatalog
-from pidish.tracking.tle_sources import TleSourceStore
+from parkes.tracking.groups import GroupStore
+from parkes.tracking.scheduler import TrackingScheduler
+from parkes.tracking.sky import SkyTracker
+from parkes.tracking.tle import TleCatalog
+from parkes.tracking.tle_sources import TleSourceStore
 
 router = APIRouter(prefix="/api/tracking", tags=["tracking"])
 

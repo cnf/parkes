@@ -2,10 +2,10 @@ from pathlib import Path
 
 from skyfield.api import EarthSatellite, Loader, Star, wgs84
 
-from pidish.config import settings
-from pidish.tracking.catalog import FIXED_SOURCES
-from pidish.tracking.groups import GroupStore
-from pidish.tracking.tle import TleCatalog
+from parkes.config import settings
+from parkes.tracking.catalog import FIXED_SOURCES
+from parkes.tracking.groups import GroupStore
+from parkes.tracking.tle import TleCatalog
 
 _BODIES = {"Sun": "sun", "Moon": "moon"}
 

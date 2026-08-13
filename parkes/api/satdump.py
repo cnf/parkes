@@ -2,8 +2,8 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from pidish.satdump.autotrack_config import load_tracked_objects, save_tracked_objects, write_config
-from pidish.satdump.process import AutotrackProcess
+from parkes.satdump.autotrack_config import load_tracked_objects, save_tracked_objects, write_config
+from parkes.satdump.process import AutotrackProcess
 
 router = APIRouter(prefix="/api/satdump", tags=["satdump"])
 

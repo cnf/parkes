@@ -1,8 +1,8 @@
 import asyncio
 import logging
 
-from pidish.rotator.rotctld_client import RotctldClient, RotctldError
-from pidish.tracking.sky import SkyTracker
+from parkes.rotator.rotctld_client import RotctldClient, RotctldError
+from parkes.tracking.sky import SkyTracker
 
 logger = logging.getLogger(__name__)
 

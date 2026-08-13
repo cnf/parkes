@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pidish.config import settings
+from parkes.config import settings
 
 
 def _path() -> Path:

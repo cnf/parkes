@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pidish.config import settings
+from parkes.config import settings
 
 # A starter set of NOAA APT satellites -- well-known NORAD IDs/frequencies,
 # just enough to demonstrate the pipeline. Edit via /api/satdump/objects.
