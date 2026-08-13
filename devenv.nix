@@ -7,6 +7,7 @@
     satdump
     hamlib_4
     soapysdr-with-plugins
+    hackrf
   ];
 
   languages.python = {

@@ -4,93 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
     <style>
-      :root {
-        --accent: #ff6700;
-        --accent-hover: #e05c00;
-        --accent2: #0091ea;
-        --accent2-hover: #0077c2;
-        --bg: #f6f6f7;
-        --surface: #ffffff;
-        --border: #e3e3e6;
-        --text: #1a1a1e;
-        --text-muted: #6b6b72;
-        --success: #16a34a;
-        --danger: #dc2626;
-        --radius: 12px;
-        --shadow: 0 1px 2px rgba(20, 20, 20, 0.04), 0 4px 16px rgba(20, 20, 20, 0.05);
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #17181b;
-          --surface: #1f2024;
-          --border: #2d2e33;
-          --text: #f1f1f2;
-          --text-muted: #97979d;
-          --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 16px rgba(0, 0, 0, 0.25);
-        }
-      }
-
-      * { box-sizing: border-box; }
-
-      body {
-        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        max-width: 40rem;
-        margin: 0 auto;
-        padding: 2rem 1.25rem 4rem;
-        line-height: 1.45;
-      }
-
-      header { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 1.75rem; }
-      header .dots { display: inline-flex; gap: 0.3rem; }
-      header .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
-      header .dot.dot2 { background: var(--accent2); }
-      h1 { font-size: 1.4rem; margin: 0; }
-      header p { margin: 0; color: var(--text-muted); font-size: 0.85rem; }
-
-      .card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        padding: 1.35rem 1.5rem 1.5rem;
-        margin-bottom: 1.5rem;
-      }
-      .card h2 {
-        margin: 0;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-      }
-      .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.1rem; }
-
-      .status-pill { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--text-muted); }
-      .status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--text-muted); transition: background 0.2s; }
-      .status-dot.on { background: var(--success); }
-      .status-dot.error { background: var(--danger); }
-
-      button {
-        font: inherit;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--text);
-        padding: 0.45rem 0.95rem;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: border-color 0.15s, color 0.15s, background 0.15s, opacity 0.15s;
-      }
-      button:hover:not(:disabled) { border-color: var(--accent2); color: var(--accent2); }
-      button:disabled { opacity: 0.4; cursor: not-allowed; }
-      button:focus-visible { outline: 2px solid var(--accent2); outline-offset: 1px; }
-      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-      button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
-      button.primary:disabled { opacity: 0.35; }
-      button.btn-sm { padding: 0.25rem 0.65rem; font-size: 0.8rem; }
-
       .position-row { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: 1.4rem; }
       .position-col { flex: 1 1 14rem; min-width: 14rem; }
       .position-col.elevation-col { flex: 0 0 auto; width: 11rem; min-width: 0; }
@@ -122,7 +37,6 @@
 
       .control-row { display: flex; gap: 1.75rem; align-items: flex-start; flex-wrap: wrap; }
       .control-side { display: flex; flex-direction: column; gap: 0.6rem; flex: 1 1 12rem; min-width: 12rem; }
-      .btn-block { width: 100%; }
 
       .jog-grid { display: grid; grid-template-columns: repeat(3, 3rem); grid-template-rows: repeat(3, 3rem); gap: 0.4rem; }
       .jog-grid button { width: 3rem; height: 3rem; border-radius: 50%; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; padding: 0; }
@@ -130,39 +44,11 @@
       #goto-form { display: flex; flex-direction: column; gap: 0.6rem; }
       .goto-fields { display: flex; gap: 0.6rem; }
       .goto-fields label { flex: 1; min-width: 0; }
-      label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--text-muted); }
 
-      input[type="number"], textarea {
-        font: inherit;
-        background: var(--bg);
-        color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 0.4rem 0.6rem;
-        width: 100%;
+      .log-preview {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; color: var(--text-muted);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 0 0.8rem;
       }
-      input:focus, textarea:focus { outline: 2px solid var(--accent2); outline-offset: 1px; }
-
-      table { border-collapse: collapse; width: 100%; }
-      th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
-      td { padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-      tr:last-child td { border-bottom: none; }
-
-      .badge { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-      .badge.up { background: rgba(22, 163, 74, 0.14); color: var(--success); }
-      .badge.down { background: rgba(107, 107, 114, 0.14); color: var(--text-muted); }
-
-      .field-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem; }
-      #satdump-objects { width: 100%; height: 10rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82rem; resize: vertical; }
-      #satdump-log {
-        width: 100%; height: 13rem; overflow-y: auto; margin: 0;
-        background: #0d0e10; color: #d7d7da; border: 1px solid var(--border); border-radius: 8px;
-        font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; line-height: 1.5;
-        padding: 0.75rem; white-space: pre-wrap;
-      }
-
-      .row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
-      .divider { border: none; border-top: 1px solid var(--border); margin: 1.1rem 0; }
     </style>
   </head>
   <body>
@@ -171,6 +57,7 @@
       <h1>{{ app_name }}</h1>
     </header>
 
+    <div class="page-grid">
     <section class="card">
       <div class="card-header">
         <h2>Rotator</h2>
@@ -245,6 +132,7 @@
       </div>
       <div class="row">
         <button id="stop-tracking-btn" disabled>Stop tracking</button>
+        <a href="/satellites" class="back-link">Manage satellite groups &rarr;</a>
       </div>
       <table>
         <thead>
@@ -253,30 +141,19 @@
         <tbody id="targets-body"></tbody>
       </table>
     </section>
+    </div>
 
     <section class="card">
       <div class="card-header">
         <h2>Satdump Autotrack</h2>
         <span class="status-pill"><span class="status-dot" id="satdump-dot"></span><span id="satdump-status"></span></span>
       </div>
-      <div class="row">
-        <button id="satdump-start-btn" class="primary">Start</button>
-        <button id="satdump-stop-btn" disabled>Stop</button>
-      </div>
-      <div class="field-label">Tracked objects (JSON)</div>
-      <textarea id="satdump-objects"></textarea>
-      <div class="row" style="margin-top: 0.6rem;">
-        <button id="satdump-save-objects-btn">Save objects</button>
-        <span id="satdump-objects-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
-      </div>
-
-      <hr class="divider" />
-
-      <pre id="satdump-log"></pre>
+      <p class="log-preview" id="satdump-last-line">&nbsp;</p>
+      <a href="/satdump" class="back-link">Manage satdump &rarr;</a>
     </section>
 
     <script src="/static/rotator.js"></script>
     <script src="/static/tracking.js"></script>
-    <script src="/static/satdump.js"></script>
+    <script src="/static/satdump-status.js"></script>
   </body>
 </html>

@@ -22,6 +22,15 @@ class Settings(BaseSettings):
 
     tracking_interval_seconds: float = 30.0
 
+    # Satellite TLEs for the Sky Tracking list -- same idea as satdump/
+    # gpredict (fetch TLE sets, cache locally, SGP4 via skyfield).
+    # Independent of satdump's own TLE cache since this list should work
+    # even if satdump has never been run. Sources (URLs) and groups are
+    # both user-managed and persisted as JSON, not fixed config.
+    tle_data_dir: str = "data/tle"
+    tle_sources_file: str = "data/tracking/tle_sources.json"
+    tracking_groups_file: str = "data/tracking/groups.json"
+
     # satdump autotrack: it owns the whole satellite pass pipeline (TLE,
     # scheduling, az/el, capture, decode) -- this app only generates its
     # config and manages the process. "source" must match one of satdump's

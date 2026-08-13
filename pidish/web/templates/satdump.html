@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }} &middot; Satdump</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <style>
+      #satdump-objects { width: 100%; height: 14rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82rem; resize: vertical; }
+      #satdump-log {
+        width: 100%; height: 22rem; overflow-y: auto; margin: 0;
+        background: #0d0e10; color: #d7d7da; border: 1px solid var(--border); border-radius: 8px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; line-height: 1.5;
+        padding: 0.75rem; white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
+      <h1>{{ app_name }}</h1>
+      <a href="/" class="back-link">&larr; Dashboard</a>
+    </header>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Satdump Autotrack</h2>
+        <span class="status-pill"><span class="status-dot" id="satdump-dot"></span><span id="satdump-status"></span></span>
+      </div>
+      <div class="row">
+        <button id="satdump-start-btn" class="primary">Start</button>
+        <button id="satdump-stop-btn" disabled>Stop</button>
+      </div>
+      <div class="field-label">Tracked objects (JSON)</div>
+      <textarea id="satdump-objects"></textarea>
+      <div class="row" style="margin-top: 0.6rem;">
+        <button id="satdump-save-objects-btn">Save objects</button>
+        <span id="satdump-objects-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+
+      <hr class="divider" />
+
+      <pre id="satdump-log"></pre>
+    </section>
+
+    <script src="/static/satdump.js"></script>
+  </body>
+</html>

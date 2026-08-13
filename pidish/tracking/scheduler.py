@@ -22,13 +22,13 @@ class TrackingScheduler:
         self.active_target: str | None = None
         self.last_error: str | None = None
 
-    def start(self, target_name: str) -> None:
-        if target_name not in self._sky.target_names():
-            raise KeyError(target_name)
+    def start(self, target_id: str) -> None:
+        if target_id not in self._sky.target_names():
+            raise KeyError(target_id)
         self.stop()
-        self.active_target = target_name
+        self.active_target = self._sky.display_name(target_id)
         self.last_error = None
-        self._task = asyncio.create_task(self._run(target_name))
+        self._task = asyncio.create_task(self._run(target_id))
 
     def stop(self) -> None:
         if self._task is not None:

@@ -15,6 +15,12 @@
     }
   }
 
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   async function refreshStatus() {
     const res = await fetch("/api/tracking/status");
     const status = await res.json();
@@ -32,12 +38,13 @@
     targetsBody.innerHTML = "";
     for (const target of targets) {
       const row = document.createElement("tr");
+      const icon = target.kind === "satellite" ? "&#128752; " : "";
       row.innerHTML = `
-        <td>${target.name}</td>
+        <td>${icon}${escapeHtml(target.name)}</td>
         <td>${target.az.toFixed(1)}&deg;</td>
         <td>${target.el.toFixed(1)}&deg;</td>
         <td><span class="badge ${target.visible ? "up" : "down"}">${target.visible ? "up" : "down"}</span></td>
-        <td><button class="btn-sm primary" ${target.visible ? "" : "disabled"} data-target="${target.name}">Track</button></td>
+        <td><button class="btn-sm primary" ${target.visible ? "" : "disabled"} data-target="${escapeHtml(target.id)}">Track</button></td>
       `;
       targetsBody.appendChild(row);
     }
