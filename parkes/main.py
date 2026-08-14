@@ -13,13 +13,17 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from parkes.api.orchestrator import router as orchestrator_router
 from parkes.api.rotator import router as rotator_router
 from parkes.api.satdump import router as satdump_router
+from parkes.api.sdr import router as sdr_router
 from parkes.api.settings import router as settings_router
 from parkes.api.tracking import router as tracking_router
 from parkes.config import settings
+from parkes.orchestrator import PassOrchestrator
 from parkes.rotator.rotctld_client import RotctldClient
 from parkes.satdump.process import AutotrackProcess
+from parkes.sdr.server import SoapyRemoteServer
 from parkes.tracking.groups import GroupStore
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
@@ -50,10 +54,14 @@ async def lifespan(app: FastAPI):
     app.state.sky = SkyTracker(app.state.tle_catalog, app.state.group_store)
     app.state.tracking_scheduler = TrackingScheduler(app.state.sky, app.state.rotator)
     app.state.satdump_process = AutotrackProcess()
+    app.state.soapy_remote = SoapyRemoteServer()
+    app.state.orchestrator = PassOrchestrator(app.state.sky, app.state.tracking_scheduler)
     yield
     tle_load_task.cancel()
     app.state.tracking_scheduler.stop()
     await app.state.satdump_process.stop()
+    await app.state.soapy_remote.stop()
+    await app.state.orchestrator.stop()
     await app.state.rotator.close()
 
 
@@ -61,6 +69,8 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(rotator_router)
 app.include_router(tracking_router)
 app.include_router(satdump_router)
+app.include_router(sdr_router)
+app.include_router(orchestrator_router)
 app.include_router(settings_router)
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
@@ -93,6 +103,13 @@ def satellites_page(request: Request):
 def satdump_page(request: Request):
     return templates.TemplateResponse(
         request, "satdump.html", {"app_name": settings.app_name}
+    )
+
+
+@app.get("/orchestrator", response_class=HTMLResponse)
+def orchestrator_page(request: Request):
+    return templates.TemplateResponse(
+        request, "orchestrator.html", {"app_name": settings.app_name}
     )
 
 

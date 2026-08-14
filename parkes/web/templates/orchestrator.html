@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }} &middot; Pass Orchestrator</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <style>
+      #app-profiles { width: 100%; height: 14rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82rem; resize: vertical; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
+      <h1>{{ app_name }}</h1>
+      <nav class="nav-links">
+        <a href="/settings" class="back-link">Settings</a>
+        <a href="/" class="back-link">&larr; Dashboard</a>
+      </nav>
+    </header>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Pass Orchestrator</h2>
+        <span class="status-pill"><span class="status-dot" id="orch-dot"></span><span id="orch-status"></span></span>
+      </div>
+      <p class="hint">
+        Sequences dish + SDR ownership across the satellites and downlinks managed on the
+        <a href="/satdump">Satdump</a> page: finds the soonest pass, points the rotator at it, and
+        launches that downlink's "app" profile for the duration. Mutually exclusive with Satdump
+        Autotrack, SDR Network Sharing, and manual tracking -- only one can hold the dish/SDR at a time.
+      </p>
+      <div class="row">
+        <button id="orch-start-btn" class="primary">Start</button>
+        <button id="orch-stop-btn" disabled>Stop</button>
+      </div>
+      <p class="hint" id="orch-current">&nbsp;</p>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>App Profiles</h2>
+      </div>
+      <p class="hint">
+        Maps a downlink's <code>app</code> name (see <a href="/satdump">tracked objects</a>) to the
+        command run for the duration of its pass. Placeholders filled in at launch:
+        <code>{frequency}</code>, <code>{output_dir}</code>, <code>{source}</code>,
+        <code>{source_id}</code>, <code>{samplerate}</code>.
+      </p>
+      <textarea id="app-profiles"></textarea>
+      <div class="row" style="margin-top: 0.6rem;">
+        <button id="save-profiles-btn">Save profiles</button>
+        <span id="profiles-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+    </section>
+
+    <script src="/static/orchestrator.js"></script>
+  </body>
+</html>

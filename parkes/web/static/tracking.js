@@ -21,6 +21,23 @@
     return div.innerHTML;
   }
 
+  let passesById = new Map();
+
+  async function refreshPasses() {
+    const res = await fetch("/api/tracking/passes");
+    const passes = await res.json();
+    passesById = new Map(passes.map((p) => [p.id, p]));
+  }
+
+  function formatPass(target) {
+    const pass = passesById.get(target.id);
+    if (!pass) return "";
+    const minsUntil = Math.round((new Date(pass.aos) - Date.now()) / 60000);
+    const when =
+      minsUntil <= 0 ? "now" : minsUntil < 60 ? `${minsUntil}m` : `${(minsUntil / 60).toFixed(1)}h`;
+    return `AOS in ${when} (max ${pass.max_elevation.toFixed(0)}&deg;)`;
+  }
+
   async function refreshStatus() {
     const res = await fetch("/api/tracking/status");
     const status = await res.json();
@@ -44,6 +61,7 @@
         <td>${target.az.toFixed(1)}&deg;</td>
         <td>${target.el.toFixed(1)}&deg;</td>
         <td><span class="badge ${target.visible ? "up" : "down"}">${target.visible ? "up" : "down"}</span></td>
+        <td>${formatPass(target)}</td>
         <td><button class="btn-sm primary" ${target.visible ? "" : "disabled"} data-target="${escapeHtml(target.id)}">Track</button></td>
       `;
       targetsBody.appendChild(row);
@@ -61,8 +79,11 @@
     refreshStatus();
   });
 
-  refreshTargets();
+  refreshPasses().then(refreshTargets);
   refreshStatus();
   setInterval(refreshTargets, 15000);
   setInterval(refreshStatus, 5000);
+  // Pass predictions change slowly (minutes at least) -- no need to
+  // recompute skyfield's find_events search on every fast az/el poll.
+  setInterval(() => refreshPasses().then(refreshTargets), 120000);
 })();

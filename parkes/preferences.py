@@ -19,6 +19,8 @@ DEFAULTS: dict[str, Any] = {
     "satdump_samplerate": settings.satdump_samplerate,
     "satdump_initial_frequency": settings.satdump_initial_frequency,
     "satdump_autotrack_min_elevation": settings.satdump_autotrack_min_elevation,
+    "soapy_remote_bind_host": settings.soapy_remote_bind_host,
+    "soapy_remote_bind_port": settings.soapy_remote_bind_port,
 }
 
 

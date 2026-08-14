@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 
 from skyfield.api import EarthSatellite, Loader, Star, wgs84
@@ -111,3 +112,52 @@ class SkyTracker:
             )
         targets.sort(key=lambda t: t["el"], reverse=True)
         return targets
+
+    def next_pass(
+        self, target_id: str, min_elevation: float = 0.0, search_hours: float = 48.0
+    ) -> dict | None:
+        """AOS/LOS/max-elevation of the next pass reaching min_elevation,
+        searched over the next search_hours. Satellites only -- Sun/Moon/
+        catalog sources don't have discrete "passes" the way an orbiting
+        target handed off to a decode pipeline does.
+
+        Returns None if no full rise-to-set pass is found in the window
+        (e.g. a currently mid-pass target, since a partial pass at the
+        start of the search window is deliberately not counted).
+        """
+        if not target_id.startswith("sat:"):
+            raise ValueError(f"next_pass only supports satellite targets, got {target_id!r}")
+        satellite = self._tle_catalog.get(int(target_id[4:]))
+        if satellite is None:
+            raise KeyError(target_id)
+
+        topos = self._current_topos()
+        t0 = self._timescale.now()
+        t1 = t0 + timedelta(hours=search_hours)
+        times, events = satellite.find_events(topos, t0, t1, altitude_degrees=min_elevation)
+
+        for i in range(len(events) - 2):
+            if events[i] == 0 and events[i + 1] == 1 and events[i + 2] == 2:
+                rise_time, culminate_time, set_time = times[i], times[i + 1], times[i + 2]
+                el, _az, _dist = (satellite - topos).at(culminate_time).altaz()
+                return {
+                    "aos": rise_time.utc_iso(),
+                    "los": set_time.utc_iso(),
+                    "max_elevation": float(el.degrees),
+                }
+        return None
+
+    def upcoming_passes(self, min_elevation: float = 0.0) -> list[dict]:
+        """next_pass() for every enabled satellite, soonest first, skipping
+        ones with no pass in the search window or unresolvable TLE data."""
+        passes = []
+        for sat in self._enabled_satellites():
+            target_id = _satellite_id(sat["norad"])
+            try:
+                result = self.next_pass(target_id, min_elevation=min_elevation)
+            except KeyError:
+                continue
+            if result is not None:
+                passes.append({"id": target_id, "name": sat["name"], **result})
+        passes.sort(key=lambda p: p["aos"])
+        return passes

@@ -57,6 +57,11 @@ def list_targets(request: Request):
     return _sky(request).list_targets()
 
 
+@router.get("/passes")
+def upcoming_passes(request: Request, min_elevation: float = 0.0):
+    return _sky(request).upcoming_passes(min_elevation=min_elevation)
+
+
 @router.get("/status")
 def status(request: Request):
     scheduler = _scheduler(request)
@@ -65,6 +70,10 @@ def status(request: Request):
 
 @router.post("/start")
 async def start(body: TrackRequest, request: Request):
+    if request.app.state.orchestrator.running:
+        raise HTTPException(
+            409, "the pass orchestrator is running -- stop it first, they'd fight over the rotator"
+        )
     try:
         _scheduler(request).start(body.target)
     except KeyError as exc:

@@ -33,6 +33,14 @@ async def start(request: Request):
     proc = _process(request)
     if proc.running:
         raise HTTPException(409, "satdump autotrack is already running")
+    if request.app.state.soapy_remote.running:
+        raise HTTPException(
+            409, "SoapyRemote server is running -- stop it first, they can't share the SDR"
+        )
+    if request.app.state.orchestrator.running:
+        raise HTTPException(
+            409, "the pass orchestrator is running -- stop it first, they can't share the SDR"
+        )
     config_path = write_config(load_tracked_objects())
     await proc.start(config_path)
     return {"status": "ok"}

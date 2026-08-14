@@ -68,6 +68,31 @@
 
     <section class="card">
       <div class="card-header">
+        <h2>SDR Network Sharing</h2>
+        <span class="status-pill"><span class="status-dot" id="sdr-dot"></span><span id="sdr-status"></span></span>
+      </div>
+      <p class="hint">
+        Exposes the local SDR over the network via SoapyRemote, so gpredict/gqrx/a laptop-side
+        satdump can use it directly. Mutually exclusive with Satdump Autotrack -- only one can hold
+        the physical device at a time.
+      </p>
+      <div class="settings-grid" style="margin-bottom: 0.8rem;">
+        <label>Bind host <input id="sdr-bind-host" type="text" placeholder="0.0.0.0" /></label>
+        <label>Bind port <input id="sdr-bind-port" type="number" step="1" placeholder="55132" /></label>
+      </div>
+      <div class="row">
+        <button id="sdr-start-btn" class="primary">Start</button>
+        <button id="sdr-stop-btn" disabled>Stop</button>
+        <button id="sdr-rescan-btn" type="button" class="btn-sm">Rescan devices</button>
+      </div>
+      <p class="hint" id="sdr-error" style="color: var(--danger);"></p>
+      <hr class="divider" />
+      <div class="field-label">Detected SoapySDR devices</div>
+      <div id="sdr-devices-list" class="hint"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
         <h2>Connection &amp; Paths</h2>
       </div>
       <p class="hint">Set via environment variables / devenv.nix -- changing these needs a restart.</p>
@@ -101,5 +126,6 @@
 
     <script src="/static/settings.js"></script>
     <script src="/static/sources.js"></script>
+    <script src="/static/sdr.js"></script>
   </body>
 </html>

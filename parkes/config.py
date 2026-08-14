@@ -49,5 +49,20 @@ class Settings(BaseSettings):
     satdump_tracked_objects_file: str = "data/satdump/tracked_objects.json"
     satdump_config_path: str = "data/satdump/autotrack_config.json"
 
+    # SoapyRemote: exposes whatever SDR SoapySDR's configured driver finds
+    # (see satdump_sdr_source) over the network, so a laptop can run
+    # gpredict/gqrx/satdump directly against it instead of through this
+    # app. Mutually exclusive with this app's own SDR use (satdump
+    # autotrack) -- only one process can hold the physical device at a time.
+    soapy_remote_bind_host: str = "0.0.0.0"
+    soapy_remote_bind_port: int = 55132
+
+    # Pass orchestrator: sequences dish + SDR ownership across
+    # tracked_objects' downlinks, launching each downlink's "app" profile
+    # (see app_profiles_file) for the duration of its pass. An alternative
+    # to satdump's own autotrack mode when a satellite needs something
+    # other than satdump run against it.
+    app_profiles_file: str = "data/tracking/app_profiles.json"
+
 
 settings = Settings()

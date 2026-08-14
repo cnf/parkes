@@ -10,19 +10,37 @@ DEFAULT_TRACKED_OBJECTS = [
     {
         "norad": 25338,  # NOAA 15
         "downlinks": [
-            {"frequency": 137620000, "live": True, "record": False, "pipeline_name": "noaa_apt"}
+            {
+                "frequency": 137620000,
+                "live": True,
+                "record": False,
+                "pipeline_name": "noaa_apt",
+                "app": "noaa_apt",
+            }
         ],
     },
     {
         "norad": 28654,  # NOAA 18
         "downlinks": [
-            {"frequency": 137912500, "live": True, "record": False, "pipeline_name": "noaa_apt"}
+            {
+                "frequency": 137912500,
+                "live": True,
+                "record": False,
+                "pipeline_name": "noaa_apt",
+                "app": "noaa_apt",
+            }
         ],
     },
     {
         "norad": 33591,  # NOAA 19
         "downlinks": [
-            {"frequency": 137100000, "live": True, "record": False, "pipeline_name": "noaa_apt"}
+            {
+                "frequency": 137100000,
+                "live": True,
+                "record": False,
+                "pipeline_name": "noaa_apt",
+                "app": "noaa_apt",
+            }
         ],
     },
 ]
