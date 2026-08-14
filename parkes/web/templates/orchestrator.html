@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ app_name }} &middot; Pass Orchestrator</title>
     <link rel="stylesheet" href="/static/style.css" />
-    <style>
-      #app-profiles { width: 100%; height: 14rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82rem; resize: vertical; }
-    </style>
   </head>
   <body>
     <header>
@@ -47,9 +44,11 @@
         <code>{frequency}</code>, <code>{output_dir}</code>, <code>{source}</code>,
         <code>{source_id}</code>, <code>{samplerate}</code>.
       </p>
-      <textarea id="app-profiles"></textarea>
-      <div class="row" style="margin-top: 0.6rem;">
-        <button id="save-profiles-btn">Save profiles</button>
+      <div id="profiles-list"></div>
+      <button id="add-profile-btn" type="button" class="btn-sm">+ New profile</button>
+      <hr class="divider" />
+      <div class="row">
+        <button id="save-profiles-btn" class="primary">Save profiles</button>
         <span id="profiles-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
       </div>
     </section>
