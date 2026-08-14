@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from skyfield.api import EarthSatellite, Loader
@@ -29,6 +30,7 @@ class TleCatalog:
         data_dir.mkdir(parents=True, exist_ok=True)
         self._loader = Loader(str(data_dir))
         self._by_norad: dict[int, EarthSatellite] = {}
+        self._source_by_norad: dict[int, str] = {}
         self._source_errors: dict[str, str] = {}
 
     def ensure_loaded(self) -> None:
@@ -41,6 +43,7 @@ class TleCatalog:
 
     def _load(self, reload: bool) -> None:
         by_norad: dict[int, EarthSatellite] = {}
+        source_by_norad: dict[int, str] = {}
         errors: dict[str, str] = {}
         for source in self._source_store.list_sources():
             try:
@@ -53,9 +56,11 @@ class TleCatalog:
                 continue
             for sat in sats:
                 by_norad[sat.model.satnum] = sat
+                source_by_norad[sat.model.satnum] = source["name"]
         self._source_errors = errors
         if by_norad:
             self._by_norad = by_norad
+            self._source_by_norad = source_by_norad
 
     def source_errors(self) -> dict[str, str]:
         return dict(self._source_errors)
@@ -66,14 +71,26 @@ class TleCatalog:
     def get(self, norad: int) -> EarthSatellite | None:
         return self._by_norad.get(norad)
 
-    def search(self, query: str, limit: int = 20) -> list[dict]:
+    def list_satellites(self, query: str = "", source: str = "", limit: int = 2000) -> list[dict]:
+        """All satellites (or a filtered subset) with enough info to browse
+        and judge freshness -- empty query/source means "everything"."""
         query = query.strip().lower()
-        if not query:
-            return []
-        results = [
-            {"norad": sat.model.satnum, "name": sat.name}
-            for sat in self._by_norad.values()
-            if query in sat.name.lower()
-        ]
+        now = datetime.now(timezone.utc)
+        results = []
+        for sat in self._by_norad.values():
+            if query and query not in sat.name.lower() and query != str(sat.model.satnum):
+                continue
+            sat_source = self._source_by_norad.get(sat.model.satnum, "")
+            if source and sat_source != source:
+                continue
+            age_days = (now - sat.epoch.utc_datetime()).total_seconds() / 86400
+            results.append(
+                {
+                    "norad": sat.model.satnum,
+                    "name": sat.name,
+                    "source": sat_source,
+                    "epoch_days_old": round(age_days, 1),
+                }
+            )
         results.sort(key=lambda r: r["name"])
         return results[:limit]

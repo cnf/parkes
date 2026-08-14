@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     tle_sources_file: str = "data/tracking/tle_sources.json"
     tracking_groups_file: str = "data/tracking/groups.json"
 
+    # Env-configured defaults for the user-editable preferences below (see
+    # preferences.py) -- useful for setting a fresh deploy's starting point
+    # via .env, but the UI-saved value in preferences_file wins once set.
+    preferences_file: str = "data/preferences.json"
+
     # satdump autotrack: it owns the whole satellite pass pipeline (TLE,
     # scheduling, az/el, capture, decode) -- this app only generates its
     # config and manages the process. "source" must match one of satdump's

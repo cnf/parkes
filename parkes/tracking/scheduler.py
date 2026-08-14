@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from parkes.preferences import preferences
 from parkes.rotator.rotctld_client import RotctldClient, RotctldError
 from parkes.tracking.sky import SkyTracker
 
@@ -11,13 +12,14 @@ class TrackingScheduler:
     """Periodically goto's the rotator to the active target's current az/el.
 
     Skips sending a goto whenever the target is below the horizon, rather
-    than pointing the dish at the ground.
+    than pointing the dish at the ground. The poll interval is read from
+    preferences fresh each loop iteration, so a change on the Settings page
+    applies to the next tick without a restart.
     """
 
-    def __init__(self, sky: SkyTracker, rotator: RotctldClient, interval_seconds: float):
+    def __init__(self, sky: SkyTracker, rotator: RotctldClient):
         self._sky = sky
         self._rotator = rotator
-        self._interval = interval_seconds
         self._task: asyncio.Task | None = None
         self.active_target: str | None = None
         self.last_error: str | None = None
@@ -46,4 +48,4 @@ class TrackingScheduler:
                 except (RotctldError, ConnectionError, OSError) as exc:
                     self.last_error = str(exc)
                     logger.warning("tracking goto failed: %s", exc)
-            await asyncio.sleep(self._interval)
+            await asyncio.sleep(preferences.get("tracking_interval_seconds"))

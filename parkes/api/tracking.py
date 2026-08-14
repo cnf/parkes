@@ -79,8 +79,8 @@ async def stop(request: Request):
 
 
 @router.get("/satellites/search")
-def search_satellites(request: Request, q: str = ""):
-    return _tle_catalog(request).search(q)
+def search_satellites(request: Request, q: str = "", source: str = ""):
+    return _tle_catalog(request).list_satellites(query=q, source=source)
 
 
 @router.get("/satellites/status")

@@ -46,7 +46,7 @@
       `;
       row.querySelector("button").addEventListener("click", async () => {
         await apiFetch(`/api/tracking/sources/${encodeURIComponent(source.name)}`, { method: "DELETE" });
-        refreshSources();
+        await refreshSources();
       });
       sourcesList.appendChild(row);
     }
@@ -66,7 +66,7 @@
       });
       sourceNameInput.value = "";
       sourceUrlInput.value = "";
-      refreshSources();
+      await refreshSources();
     } catch (err) {
       addSourceStatus.textContent = err.message;
     }

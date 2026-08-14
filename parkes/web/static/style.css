@@ -46,7 +46,8 @@ header .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var
 header .dot.dot2 { background: var(--accent2); }
 h1 { font-size: 1.4rem; margin: 0; }
 header p { margin: 0; color: var(--text-muted); font-size: 0.85rem; }
-.back-link { margin-left: auto; color: var(--text-muted); font-size: 0.85rem; text-decoration: none; }
+.nav-links { margin-left: auto; display: flex; gap: 1rem; align-items: baseline; }
+.back-link { color: var(--text-muted); font-size: 0.85rem; text-decoration: none; }
 .back-link:hover { color: var(--accent2); }
 
 .card {

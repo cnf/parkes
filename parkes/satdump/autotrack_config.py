@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from parkes.config import settings
+from parkes.preferences import preferences
 
 # A starter set of NOAA APT satellites -- well-known NORAD IDs/frequencies,
 # just enough to demonstrate the pipeline. Edit via /api/satdump/objects.
@@ -42,26 +43,27 @@ def save_tracked_objects(objects: list[dict]) -> None:
 
 
 def build_autotrack_config(tracked_objects: list[dict]) -> dict:
+    prefs = preferences.get_all()
     parameters = {
-        "samplerate": settings.satdump_samplerate,
-        "initial_frequency": settings.satdump_initial_frequency,
-        "source": settings.satdump_sdr_source,
+        "samplerate": prefs["satdump_samplerate"],
+        "initial_frequency": prefs["satdump_initial_frequency"],
+        "source": prefs["satdump_sdr_source"],
     }
-    if settings.satdump_sdr_source_id:
-        parameters["source_id"] = settings.satdump_sdr_source_id
+    if prefs["satdump_sdr_source_id"]:
+        parameters["source_id"] = prefs["satdump_sdr_source_id"]
 
     return {
         "parameters": parameters,
         "output_folder": settings.satdump_output_dir,
         "qth": {
-            "lon": settings.observer_lon,
-            "lat": settings.observer_lat,
-            "alt": settings.observer_elevation_m,
+            "lon": prefs["observer_lon"],
+            "lat": prefs["observer_lat"],
+            "alt": prefs["observer_elevation_m"],
         },
         "tracked_objects": tracked_objects,
         "tracking": {
             "autotrack_cfg": {
-                "autotrack_min_elevation": settings.satdump_autotrack_min_elevation,
+                "autotrack_min_elevation": prefs["satdump_autotrack_min_elevation"],
                 "stop_sdr_when_idle": False,
                 "multi_mode": False,
                 "use_localtime": False,

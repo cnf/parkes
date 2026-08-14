@@ -6,55 +6,43 @@
     <title>{{ app_name }} &middot; Satellites</title>
     <link rel="stylesheet" href="/static/style.css" />
     <style>
-      .source-row { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
-      .source-row:last-child { border-bottom: none; }
-      .source-row-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
-      .source-name { font-weight: 600; font-size: 0.9rem; }
-      .source-url { font-size: 0.78rem; color: var(--text-muted); word-break: break-all; }
-      .source-error { font-size: 0.78rem; color: var(--danger); margin-top: 0.2rem; }
       .hint { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1rem; }
-      #add-source-form { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
-      #add-source-form .field-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-      #add-source-form .field-row label { flex: 1; min-width: 10rem; }
+
+      .group-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+      .group-row:last-child { border-bottom: none; }
+      .group-row label { display: flex; flex-direction: row; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text); font-weight: 600; }
+      .group-row input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+      .group-row .count { color: var(--text-muted); font-weight: normal; }
+
+      .satellites-toolbar { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+      .satellites-toolbar input[type="text"] { flex: 1 1 14rem; }
+      .satellites-toolbar select { flex: 0 1 12rem; }
+      .table-scroll { overflow-x: auto; }
+      #satellites-table { min-width: 34rem; }
+      #satellites-table th.group-col, #satellites-table td.group-col { text-align: center; white-space: nowrap; }
+      #satellites-table td.group-col input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+      .age-fresh { color: var(--success); }
+      .age-stale { color: var(--danger); }
     </style>
   </head>
   <body>
     <header>
       <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
       <h1>{{ app_name }}</h1>
-      <a href="/" class="back-link">&larr; Dashboard</a>
+      <nav class="nav-links">
+        <a href="/settings" class="back-link">Settings</a>
+        <a href="/" class="back-link">&larr; Dashboard</a>
+      </nav>
     </header>
-
-    <div class="page-grid">
-    <section class="card">
-      <div class="card-header">
-        <h2>TLE Sources</h2>
-        <span id="tle-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
-      </div>
-      <p class="hint">
-        Any URL serving a TLE-formatted file (Celestrak group queries, AMSAT, a custom list...).
-        Adding a source only makes its satellites searchable below -- assigning them into groups is a separate step.
-      </p>
-      <div id="sources-list"></div>
-      <form id="add-source-form">
-        <div class="field-row">
-          <label>Name <input id="source-name" type="text" placeholder="e.g. Amateur" required /></label>
-          <label>URL <input id="source-url" type="url" placeholder="https://..." required /></label>
-        </div>
-        <button type="submit" class="primary btn-block">Add source</button>
-        <span id="add-source-status" style="color: var(--danger); font-size: 0.82rem;"></span>
-      </form>
-      <hr class="divider" />
-      <button id="tle-refresh-btn" type="button" class="btn-sm">Refresh all sources</button>
-    </section>
 
     <section class="card">
       <div class="card-header">
         <h2>Groups</h2>
       </div>
       <p class="hint">
-        Search satellites from any loaded source and assign them into named groups.
         Enabled groups' satellites show up in the Sky Tracking list on the dashboard.
+        Pick which satellites belong to which group in the table below. TLE sources are managed
+        on the <a href="/settings">Settings</a> page.
       </p>
       <div id="groups-list"></div>
       <form id="new-group-form" class="row" style="margin-top: 0.3rem;">
@@ -62,9 +50,30 @@
         <button type="submit" class="btn-sm">Add group</button>
       </form>
     </section>
-    </div>
 
-    <script src="/static/sources.js"></script>
+    <section class="card">
+      <div class="card-header">
+        <h2>All Satellites</h2>
+        <span id="satellites-count" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+      <div class="satellites-toolbar">
+        <input id="satellites-filter" type="text" placeholder="Filter by name or NORAD id..." />
+        <select id="satellites-source-filter">
+          <option value="">All sources</option>
+        </select>
+      </div>
+      <div class="table-scroll">
+        <table id="satellites-table">
+          <thead>
+            <tr id="satellites-head-row">
+              <th>Name</th><th>NORAD</th><th>Source</th><th>TLE age</th>
+            </tr>
+          </thead>
+          <tbody id="satellites-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <script src="/static/groups.js"></script>
   </body>
 </html>

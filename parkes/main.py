@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from parkes.api.rotator import router as rotator_router
 from parkes.api.satdump import router as satdump_router
+from parkes.api.settings import router as settings_router
 from parkes.api.tracking import router as tracking_router
 from parkes.config import settings
 from parkes.rotator.rotctld_client import RotctldClient
@@ -47,9 +48,7 @@ async def lifespan(app: FastAPI):
     tle_load_task = asyncio.create_task(_load_tles_in_background(app.state.tle_catalog))
     app.state.group_store = GroupStore()
     app.state.sky = SkyTracker(app.state.tle_catalog, app.state.group_store)
-    app.state.tracking_scheduler = TrackingScheduler(
-        app.state.sky, app.state.rotator, settings.tracking_interval_seconds
-    )
+    app.state.tracking_scheduler = TrackingScheduler(app.state.sky, app.state.rotator)
     app.state.satdump_process = AutotrackProcess()
     yield
     tle_load_task.cancel()
@@ -62,6 +61,7 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(rotator_router)
 app.include_router(tracking_router)
 app.include_router(satdump_router)
+app.include_router(settings_router)
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
 
@@ -93,6 +93,13 @@ def satellites_page(request: Request):
 def satdump_page(request: Request):
     return templates.TemplateResponse(
         request, "satdump.html", {"app_name": settings.app_name}
+    )
+
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    return templates.TemplateResponse(
+        request, "settings.html", {"app_name": settings.app_name}
     )
 
 

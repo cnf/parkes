@@ -3,6 +3,7 @@ from pathlib import Path
 from skyfield.api import EarthSatellite, Loader, Star, wgs84
 
 from parkes.config import settings
+from parkes.preferences import preferences
 from parkes.tracking.catalog import FIXED_SOURCES
 from parkes.tracking.groups import GroupStore
 from parkes.tracking.tle import TleCatalog
@@ -23,6 +24,9 @@ class SkyTracker:
     Fixed targets (Sun/Moon/catalog) are keyed by their own name. Satellites
     are keyed by "sat:<norad>" since group membership is dynamic and names
     aren't guaranteed unique.
+
+    Observer location is read from preferences fresh on every computation
+    (not cached) so changes made on the Settings page apply immediately.
     """
 
     def __init__(self, tle_catalog: TleCatalog, group_store: GroupStore):
@@ -33,17 +37,20 @@ class SkyTracker:
         data_dir.mkdir(parents=True, exist_ok=True)
         loader = Loader(str(data_dir))
         self._timescale = loader.timescale()
-        eph = loader("de421.bsp")
-        self._topos = wgs84.latlon(
-            settings.observer_lat, settings.observer_lon, settings.observer_elevation_m
-        )
-        self._observer = eph["earth"] + self._topos
+        self._eph = loader("de421.bsp")
+        self._earth = self._eph["earth"]
 
-        self._targets = {name: eph[body] for name, body in _BODIES.items()}
+        self._targets = {name: self._eph[body] for name, body in _BODIES.items()}
         for source in FIXED_SOURCES:
             self._targets[source.name] = Star(
                 ra_hours=source.ra_hours, dec_degrees=source.dec_degrees
             )
+
+    def _current_topos(self):
+        prefs = preferences.get_all()
+        return wgs84.latlon(
+            prefs["observer_lat"], prefs["observer_lon"], prefs["observer_elevation_m"]
+        )
 
     def _enabled_satellites(self) -> list[dict]:
         return [
@@ -66,14 +73,16 @@ class SkyTracker:
 
     def compute_azel(self, target_id: str) -> tuple[float, float]:
         t = self._timescale.now()
+        topos = self._current_topos()
         if target_id.startswith("sat:"):
             satellite = self._tle_catalog.get(int(target_id[4:]))
             if satellite is None:
                 raise KeyError(target_id)
-            topocentric = (satellite - self._topos).at(t)
+            topocentric = (satellite - topos).at(t)
         else:
             target = self._targets[target_id]
-            topocentric = self._observer.at(t).observe(target).apparent()
+            observer = self._earth + topos
+            topocentric = observer.at(t).observe(target).apparent()
         alt, az, _distance = topocentric.altaz()
         return float(az.degrees), float(alt.degrees)
 
