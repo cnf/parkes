@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     tle_data_dir: str = "data/tle"
     tle_sources_file: str = "data/tracking/tle_sources.json"
     tracking_groups_file: str = "data/tracking/groups.json"
+    fixed_targets_file: str = "data/tracking/fixed_targets.json"
 
     # Env-configured defaults for the user-editable preferences below (see
     # preferences.py) -- useful for setting a fresh deploy's starting point

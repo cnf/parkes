@@ -1,5 +1,6 @@
 (() => {
   const groupsList = document.getElementById("groups-list");
+  const fixedTargetsList = document.getElementById("fixed-targets-list");
   const newGroupForm = document.getElementById("new-group-form");
   const newGroupName = document.getElementById("new-group-name");
 
@@ -10,6 +11,7 @@
   const sourceFilterSelect = document.getElementById("satellites-source-filter");
 
   let groups = [];
+  let fixedTargets = [];
   let satellites = [];
   let membership = new Map(); // norad -> Set(groupName)
 
@@ -40,6 +42,10 @@
   async function loadGroups() {
     groups = await apiFetch("/api/tracking/groups");
     computeMembership();
+  }
+
+  async function loadFixedTargets() {
+    fixedTargets = await apiFetch("/api/tracking/fixed_targets");
   }
 
   async function loadSources() {
@@ -87,6 +93,28 @@
         await refreshAll();
       });
       groupsList.appendChild(row);
+    }
+  }
+
+  function renderFixedTargetsList() {
+    fixedTargetsList.innerHTML = "";
+    for (const target of fixedTargets) {
+      const row = document.createElement("div");
+      row.className = "group-row";
+      row.innerHTML = `
+        <label>
+          <input type="checkbox" ${target.enabled ? "checked" : ""} />
+          ${escapeHtml(target.name)}
+        </label>
+      `;
+      row.querySelector("input").addEventListener("change", async (event) => {
+        await apiFetch(`/api/tracking/fixed_targets/${encodeURIComponent(target.name)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: event.target.checked }),
+        });
+      });
+      fixedTargetsList.appendChild(row);
     }
   }
 
@@ -160,8 +188,9 @@
   }
 
   async function refreshAll() {
-    await Promise.all([loadGroups(), loadSources(), loadSatellites()]);
+    await Promise.all([loadGroups(), loadFixedTargets(), loadSources(), loadSatellites()]);
     renderGroupsList();
+    renderFixedTargetsList();
     renderTableHead();
     renderTableBody();
   }

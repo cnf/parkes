@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from parkes.tracking.fixed_targets import FixedTargetStore
 from parkes.tracking.groups import GroupStore
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
@@ -46,6 +47,10 @@ def _tle_catalog(request: Request) -> TleCatalog:
 
 def _groups(request: Request) -> GroupStore:
     return request.app.state.group_store
+
+
+def _fixed_targets(request: Request) -> FixedTargetStore:
+    return request.app.state.fixed_target_store
 
 
 def _sources(request: Request) -> TleSourceStore:
@@ -126,6 +131,20 @@ def add_source(body: AddSourceRequest, request: Request):
 def remove_source(name: str, request: Request):
     _sources(request).remove_source(name)
     _tle_catalog(request).refresh()
+    return {"status": "ok"}
+
+
+@router.get("/fixed_targets")
+def list_fixed_targets(request: Request):
+    return _fixed_targets(request).list_all()
+
+
+@router.patch("/fixed_targets/{name}")
+def set_fixed_target_enabled(name: str, body: SetEnabledRequest, request: Request):
+    try:
+        _fixed_targets(request).set_enabled(name, body.enabled)
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown fixed target: {name}") from exc
     return {"status": "ok"}
 
 

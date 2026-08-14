@@ -6,6 +6,7 @@ from skyfield.api import EarthSatellite, Loader, Star, wgs84
 from parkes.config import settings
 from parkes.preferences import preferences
 from parkes.tracking.catalog import FIXED_SOURCES
+from parkes.tracking.fixed_targets import FixedTargetStore
 from parkes.tracking.groups import GroupStore
 from parkes.tracking.tle import TleCatalog
 
@@ -20,7 +21,9 @@ class SkyTracker:
     """Computes az/el for the Sun, Moon, a catalog of fixed radio sources,
     and satellites from enabled groups, using skyfield -- the existing,
     standard library for this kind of ephemeris/SGP4 math, not something
-    worth reimplementing.
+    worth reimplementing. Fixed targets and satellite groups are each
+    individually toggleable; disabled ones are excluded from target_names()
+    and list_targets() but their az/el can still be computed directly.
 
     Fixed targets (Sun/Moon/catalog) are keyed by their own name. Satellites
     are keyed by "sat:<norad>" since group membership is dynamic and names
@@ -30,9 +33,12 @@ class SkyTracker:
     (not cached) so changes made on the Settings page apply immediately.
     """
 
-    def __init__(self, tle_catalog: TleCatalog, group_store: GroupStore):
+    def __init__(
+        self, tle_catalog: TleCatalog, group_store: GroupStore, fixed_target_store: FixedTargetStore
+    ):
         self._tle_catalog = tle_catalog
         self._groups = group_store
+        self._fixed_targets = fixed_target_store
 
         data_dir = Path(settings.skyfield_data_dir)
         data_dir.mkdir(parents=True, exist_ok=True)
@@ -61,8 +67,11 @@ class SkyTracker:
             for sat in group["satellites"]
         ]
 
+    def _enabled_fixed_target_names(self) -> set[str]:
+        return {t["name"] for t in self._fixed_targets.list_all() if t["enabled"]}
+
     def target_names(self) -> list[str]:
-        names = list(self._targets.keys())
+        names = [name for name in self._targets if name in self._enabled_fixed_target_names()]
         names += [_satellite_id(sat["norad"]) for sat in self._enabled_satellites()]
         return names
 
@@ -88,9 +97,11 @@ class SkyTracker:
         return float(az.degrees), float(alt.degrees)
 
     def list_targets(self) -> list[dict]:
+        enabled_fixed = self._enabled_fixed_target_names()
         targets = [
             {"id": name, "name": name, "kind": "fixed", "az": az, "el": el, "visible": bool(el > 0)}
             for name in self._targets
+            if name in enabled_fixed
             for az, el in [self.compute_azel(name)]
         ]
         for sat in self._enabled_satellites():

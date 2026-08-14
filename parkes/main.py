@@ -24,6 +24,7 @@ from parkes.orchestrator import PassOrchestrator
 from parkes.rotator.rotctld_client import RotctldClient
 from parkes.satdump.process import AutotrackProcess
 from parkes.sdr.server import SoapyRemoteServer
+from parkes.tracking.fixed_targets import FixedTargetStore
 from parkes.tracking.groups import GroupStore
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
@@ -51,7 +52,8 @@ async def lifespan(app: FastAPI):
     # a slow/offline connection can't block the whole app from starting.
     tle_load_task = asyncio.create_task(_load_tles_in_background(app.state.tle_catalog))
     app.state.group_store = GroupStore()
-    app.state.sky = SkyTracker(app.state.tle_catalog, app.state.group_store)
+    app.state.fixed_target_store = FixedTargetStore()
+    app.state.sky = SkyTracker(app.state.tle_catalog, app.state.group_store, app.state.fixed_target_store)
     app.state.tracking_scheduler = TrackingScheduler(app.state.sky, app.state.rotator)
     app.state.satdump_process = AutotrackProcess()
     app.state.soapy_remote = SoapyRemoteServer()
