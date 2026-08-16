@@ -9,8 +9,7 @@
     "observer_elevation_m",
     "tracking_interval_seconds",
     "satdump_samplerate",
-    "satdump_initial_frequency",
-    "satdump_autotrack_min_elevation",
+    "orchestrator_min_elevation",
   ]);
 
   function escapeHtml(text) {

@@ -23,9 +23,9 @@ def _save(data: dict) -> None:
 
 class GroupStore:
     """Named groups of satellites the user wants shown in the Sky Tracking
-    list. Persisted as JSON, loaded/saved per call -- same pattern as
-    satdump's tracked_objects.json, low enough traffic that in-memory
-    caching isn't worth the invalidation complexity."""
+    list. Persisted as JSON, loaded/saved per call -- same pattern as the
+    Pass Orchestrator's tracked_objects.json, low enough traffic that
+    in-memory caching isn't worth the invalidation complexity."""
 
     def list_groups(self) -> list[dict]:
         data = _load()

@@ -73,14 +73,23 @@ class TleCatalog:
 
     def list_satellites(self, query: str = "", source: str = "", limit: int = 2000) -> list[dict]:
         """All satellites (or a filtered subset) with enough info to browse
-        and judge freshness -- empty query/source means "everything"."""
+        and judge freshness -- empty query/source means "everything". query
+        matches the satellite's own name/NORAD id or its TLE source's name
+        (e.g. "weather" surfaces every satellite in a "Weather" source),
+        so it doubles as a quick way to browse a whole source without the
+        separate source dropdown."""
         query = query.strip().lower()
         now = datetime.now(timezone.utc)
         results = []
         for sat in self._by_norad.values():
-            if query and query not in sat.name.lower() and query != str(sat.model.satnum):
-                continue
             sat_source = self._source_by_norad.get(sat.model.satnum, "")
+            if (
+                query
+                and query not in sat.name.lower()
+                and query != str(sat.model.satnum)
+                and query not in sat_source.lower()
+            ):
+                continue
             if source and sat_source != source:
                 continue
             age_days = (now - sat.epoch.utc_datetime()).total_seconds() / 86400

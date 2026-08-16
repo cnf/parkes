@@ -26,10 +26,6 @@ async def start(request: Request):
     server = _server(request)
     if server.running:
         raise HTTPException(409, "SoapyRemote server is already running")
-    if request.app.state.satdump_process.running:
-        raise HTTPException(
-            409, "satdump autotrack is running -- stop it first, they can't share the SDR"
-        )
     if request.app.state.orchestrator.running:
         raise HTTPException(
             409, "the pass orchestrator is running -- stop it first, they can't share the SDR"

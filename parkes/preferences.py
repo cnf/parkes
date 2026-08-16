@@ -17,8 +17,7 @@ DEFAULTS: dict[str, Any] = {
     "satdump_sdr_source": settings.satdump_sdr_source,
     "satdump_sdr_source_id": settings.satdump_sdr_source_id,
     "satdump_samplerate": settings.satdump_samplerate,
-    "satdump_initial_frequency": settings.satdump_initial_frequency,
-    "satdump_autotrack_min_elevation": settings.satdump_autotrack_min_elevation,
+    "orchestrator_min_elevation": settings.orchestrator_min_elevation,
     "soapy_remote_bind_host": settings.soapy_remote_bind_host,
     "soapy_remote_bind_port": settings.soapy_remote_bind_port,
 }
@@ -28,7 +27,7 @@ class PreferencesStore:
     """JSON-persisted overrides layered on top of DEFAULTS, loaded/saved
     per call -- same pattern as GroupStore/TleSourceStore. Callers that
     need to react to changes without a restart (SkyTracker, the tracking
-    scheduler, satdump config generation) read via get()/get_all() at the
+    scheduler, the Pass Orchestrator) read via get()/get_all() at the
     point of use rather than caching values at construction time.
     """
 

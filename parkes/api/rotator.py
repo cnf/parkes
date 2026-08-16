@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -72,7 +73,8 @@ async def park(request: Request):
 async def position_stream(websocket: WebSocket):
     await websocket.accept()
     client: RotctldClient = websocket.app.state.rotator
-    try:
+
+    async def send_loop() -> None:
         while True:
             try:
                 az, el = await client.get_position()
@@ -80,5 +82,18 @@ async def position_stream(websocket: WebSocket):
             except (RotctldError, ConnectionError, OSError) as exc:
                 await websocket.send_json({"error": str(exc)})
             await asyncio.sleep(1)
+
+    # The client never sends anything on this socket -- receive() is used
+    # purely to detect disconnection. A pure send loop can't rely on this:
+    # a write into an already-dead connection can silently no-op instead
+    # of raising, so send_loop() alone would spin forever logging
+    # "socket.send() raised exception." from asyncio instead of exiting.
+    send_task = asyncio.create_task(send_loop())
+    try:
+        await websocket.receive()
     except WebSocketDisconnect:
         pass
+    finally:
+        send_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await send_task

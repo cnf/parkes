@@ -6,10 +6,11 @@ class SoapyRemoteServer(ManagedProcess):
     whatever SDR SoapySDR's configured driver finds (see
     settings.satdump_sdr_source) over the network -- so gpredict/gqrx/a
     laptop-side satdump can use it directly instead of going through this
-    app's own satdump autotrack process.
+    app's own Pass Orchestrator.
 
-    Mutually exclusive with AutotrackProcess: both want the same physical
-    device, so the API layer refuses to start one while the other runs.
+    Mutually exclusive with the Pass Orchestrator: both want the same
+    physical device, so the API layer refuses to start one while the
+    other runs.
     """
 
     async def start(self, bind_host: str, bind_port: int) -> None:

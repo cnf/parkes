@@ -37,32 +37,33 @@ class Settings(BaseSettings):
     # via .env, but the UI-saved value in preferences_file wins once set.
     preferences_file: str = "data/preferences.json"
 
-    # satdump autotrack: it owns the whole satellite pass pipeline (TLE,
-    # scheduling, az/el, capture, decode) -- this app only generates its
-    # config and manages the process. "source" must match one of satdump's
-    # SDR handler ids (e.g. "hackrf", "airspy", "soapysdr", "rtlsdr").
+    # SDR parameters handed to app profile commands as {source}/{source_id}/
+    # {samplerate} placeholders (see app_profiles_file). "source" must match
+    # one of satdump's SDR handler ids (e.g. "hackrf", "airspy", "soapysdr",
+    # "rtlsdr") since that's the most likely thing being launched, but
+    # nothing here is satdump-specific.
     satdump_sdr_source: str = "hackrf"
     satdump_sdr_source_id: str | None = None
     satdump_samplerate: int = 6_000_000
-    satdump_initial_frequency: int = 137_500_000
     satdump_output_dir: str = "data/satdump/output"
-    satdump_autotrack_min_elevation: float = 5.0
-    satdump_tracked_objects_file: str = "data/satdump/tracked_objects.json"
-    satdump_config_path: str = "data/satdump/autotrack_config.json"
+    tracked_objects_file: str = "data/tracking/tracked_objects.json"
 
     # SoapyRemote: exposes whatever SDR SoapySDR's configured driver finds
     # (see satdump_sdr_source) over the network, so a laptop can run
     # gpredict/gqrx/satdump directly against it instead of through this
-    # app. Mutually exclusive with this app's own SDR use (satdump
-    # autotrack) -- only one process can hold the physical device at a time.
+    # app. Mutually exclusive with this app's own SDR use (the Pass
+    # Orchestrator) -- only one process can hold the physical device at a
+    # time.
     soapy_remote_bind_host: str = "0.0.0.0"
     soapy_remote_bind_port: int = 55132
 
-    # Pass orchestrator: sequences dish + SDR ownership across
-    # tracked_objects' downlinks, launching each downlink's "app" profile
-    # (see app_profiles_file) for the duration of its pass. An alternative
-    # to satdump's own autotrack mode when a satellite needs something
-    # other than satdump run against it.
+    # Pass Orchestrator: sequences dish + SDR ownership across
+    # tracked_objects.json's downlinks, launching each downlink's "pass"-mode
+    # app profile (see app_profiles_file) for the duration of its pass.
+    # "Standalone"-mode profiles are unrelated to any satellite -- started/
+    # stopped manually or on their own timer, no rotator/SDR involvement
+    # from this app at all.
+    orchestrator_min_elevation: float = 5.0
     app_profiles_file: str = "data/tracking/app_profiles.json"
 
 

@@ -15,8 +15,7 @@ class UpdateSettingsRequest(BaseModel):
     satdump_sdr_source: str | None = None
     satdump_sdr_source_id: str | None = None
     satdump_samplerate: int | None = None
-    satdump_initial_frequency: int | None = None
-    satdump_autotrack_min_elevation: float | None = None
+    orchestrator_min_elevation: float | None = None
     soapy_remote_bind_host: str | None = None
     soapy_remote_bind_port: int | None = None
 

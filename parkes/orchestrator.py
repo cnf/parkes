@@ -2,13 +2,12 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from parkes.config import settings
 from parkes.preferences import preferences
 from parkes.process import ManagedProcess
-from parkes.satdump.autotrack_config import load_tracked_objects
-from parkes.sdr.app_profiles import load_profiles
+from parkes.sdr.app_profiles import load_profiles, resolve_command
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
+from parkes.tracking.tracked_objects import load_tracked_objects
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +21,17 @@ _POLL_SECONDS = 60
 class PassOrchestrator:
     """Sequences dish + SDR ownership across tracked_objects' downlinks:
     finds the soonest upcoming pass, points the rotator at it, and runs
-    the matching app profile's process for the duration -- then repeats.
+    the matching "pass"-mode app profile's process for the duration --
+    then repeats. (Standalone-mode profiles are unrelated to this and are
+    run by StandaloneAppRunner instead.)
 
     A downlink with no "app" set still gets rotator tracking but no
     process launch, which is a reasonable "dish only" way to try this out.
 
-    Mutually exclusive with AutotrackProcess and SoapyRemoteServer (they
-    all want the same physical SDR) and with manual single-target tracking
-    (they'd fight over the rotator) -- enforced by the API layer, not here.
+    current_target is non-None only while actively mid-pass (i.e. the
+    rotator is claimed) -- callers that need to know whether the rotator
+    is free right now, as opposed to whether the orchestrator loop is
+    merely running, should check that rather than `running`.
     """
 
     def __init__(self, sky: SkyTracker, scheduler: TrackingScheduler):
@@ -86,7 +88,7 @@ class PassOrchestrator:
             await self._run_pass(target_id, downlink, pass_info)
 
     def _find_next_pass(self) -> tuple[str, dict, dict] | None:
-        min_elevation = preferences.get("satdump_autotrack_min_elevation")
+        min_elevation = preferences.get("orchestrator_min_elevation")
         best: tuple[str, dict, dict] | None = None
         for obj in load_tracked_objects():
             if not obj.get("enabled", True):
@@ -111,22 +113,25 @@ class PassOrchestrator:
 
         profile_name = downlink.get("app")
         profile = load_profiles().get(profile_name) if profile_name else None
-        if profile is not None:
+        if profile is not None and profile.get("mode", "pass") != "pass":
+            logger.warning(
+                "orchestrator: app profile %r is standalone, not launching for %s",
+                profile_name,
+                target_id,
+            )
+        elif profile is not None:
             try:
-                prefs = preferences.get_all()
-                command = [
-                    part.format(
-                        frequency=downlink["frequency"],
-                        output_dir=settings.satdump_output_dir,
-                        source=prefs["satdump_sdr_source"],
-                        source_id=prefs["satdump_sdr_source_id"] or "",
-                        samplerate=prefs["satdump_samplerate"],
-                    )
-                    for part in profile["command"]
-                ]
-                await self._app_process.start(*command)
+                command = resolve_command(profile["command"], frequency=downlink["frequency"])
             except (KeyError, IndexError) as exc:
                 logger.warning("orchestrator: bad app profile %r: %s", profile_name, exc)
+            else:
+                try:
+                    await self._app_process.start(*command)
+                except OSError as exc:
+                    # A bad command (typo'd path, missing binary...) shouldn't
+                    # take down the whole orchestrator loop -- log it and
+                    # keep tracking the pass with no process running.
+                    logger.warning("orchestrator: failed to launch %r: %s", profile_name, exc)
         elif profile_name:
             logger.warning("orchestrator: unknown app profile %r for %s", profile_name, target_id)
 

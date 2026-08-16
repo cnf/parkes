@@ -53,13 +53,17 @@
           </div>
         </div>
         <div class="settings-section">
-          <div class="field-label">Satdump / SDR</div>
+          <div class="field-label">SDR / App Profiles</div>
           <div class="settings-grid">
             <label>SDR source <input name="satdump_sdr_source" type="text" placeholder="hackrf" /></label>
             <label>SDR source id <input name="satdump_sdr_source_id" type="text" placeholder="optional" /></label>
             <label>Sample rate (Hz) <input name="satdump_samplerate" type="number" step="1" /></label>
-            <label>Initial frequency (Hz) <input name="satdump_initial_frequency" type="number" step="1" /></label>
-            <label>Autotrack min elevation (&deg;) <input name="satdump_autotrack_min_elevation" type="number" step="0.5" /></label>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="field-label">Pass Orchestrator</div>
+          <div class="settings-grid">
+            <label>Min elevation (&deg;) <input name="orchestrator_min_elevation" type="number" step="0.5" /></label>
           </div>
         </div>
         <button type="submit" class="primary">Save preferences</button>
@@ -73,8 +77,8 @@
       </div>
       <p class="hint">
         Exposes the local SDR over the network via SoapyRemote, so gpredict/gqrx/a laptop-side
-        satdump can use it directly. Mutually exclusive with Satdump Autotrack -- only one can hold
-        the physical device at a time.
+        satdump can use it directly. Mutually exclusive with the Pass Orchestrator -- only one can
+        hold the physical device at a time.
       </p>
       <div class="settings-grid" style="margin-bottom: 0.8rem;">
         <label>Bind host <input id="sdr-bind-host" type="text" placeholder="0.0.0.0" /></label>

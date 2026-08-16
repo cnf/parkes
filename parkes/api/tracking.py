@@ -75,9 +75,11 @@ def status(request: Request):
 
 @router.post("/start")
 async def start(body: TrackRequest, request: Request):
-    if request.app.state.orchestrator.running:
+    if request.app.state.orchestrator.current_target is not None:
         raise HTTPException(
-            409, "the pass orchestrator is running -- stop it first, they'd fight over the rotator"
+            409,
+            "the pass orchestrator is actively tracking a pass -- stop it first, "
+            "they'd fight over the rotator",
         )
     try:
         _scheduler(request).start(body.target)

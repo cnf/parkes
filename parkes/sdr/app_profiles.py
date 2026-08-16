@@ -2,14 +2,32 @@ import json
 from pathlib import Path
 
 from parkes.config import settings
+from parkes.preferences import preferences
 
 # A starter profile showing the expected shape -- {frequency}/{output_dir}/
-# {source}/{source_id}/{samplerate} are filled in from the downlink and
-# current preferences at launch time. Verify these flags against
-# `satdump live --help` for your installed satdump version before relying
-# on it; CLI flags aren't guaranteed stable across releases.
+# {source}/{source_id}/{samplerate} are filled in at launch time (frequency
+# only for "pass"-mode profiles, from their triggering downlink; the rest
+# from current preferences). Verify these flags against `satdump live
+# --help` for your installed satdump version before relying on it; CLI
+# flags aren't guaranteed stable across releases.
+#
+# Each profile's dict key is its stable id -- generated once (by the UI,
+# from the profile's name) and never changed again, so renaming a profile
+# (the "name" field) doesn't orphan every tracked-object downlink that
+# references it by id.
+#
+# mode:
+#   "pass"       -- launched by the Pass Orchestrator for the duration of
+#                    a satellite pass it's referenced from (see
+#                    tracked_objects.json); needs {frequency}.
+#   "standalone" -- unrelated to any satellite/pass. Started/stopped by
+#                    hand, or automatically every schedule_seconds if set
+#                    (skipped if already running). Parkes never touches
+#                    the rotator for these.
 DEFAULT_PROFILES = {
     "noaa_apt": {
+        "name": "noaa_apt",
+        "mode": "pass",
         "command": [
             "satdump",
             "live",
@@ -38,3 +56,22 @@ def save_profiles(profiles: dict) -> None:
     path = Path(settings.app_profiles_file)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(profiles, indent=2))
+
+
+def resolve_command(command: list[str], **overrides) -> list[str]:
+    """Fills in a profile's command-arg placeholders. `overrides` (e.g.
+    frequency, from the triggering downlink) take precedence over the
+    shared, always-available preference-derived values. Raises KeyError
+    via str.format if the command references a placeholder that isn't
+    supplied -- e.g. {frequency} on a standalone profile, which has no
+    downlink to take it from.
+    """
+    prefs = preferences.get_all()
+    values = {
+        "output_dir": settings.satdump_output_dir,
+        "source": prefs["satdump_sdr_source"],
+        "source_id": prefs["satdump_sdr_source_id"] or "",
+        "samplerate": prefs["satdump_samplerate"],
+        **overrides,
+    }
+    return [part.format(**values) for part in command]

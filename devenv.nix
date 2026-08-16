@@ -22,7 +22,7 @@
     ]);
   };
 
-  processes.web.exec = "uvicorn parkes.main:app --reload --host 0.0.0.0 --port 8000";
+  processes.web.exec = "uvicorn parkes.main:app --host 0.0.0.0 --port 8000";
 
   # rotctld is the only thing that speaks serial EasyCommII to the hardware.
   # Defaults to Hamlib's dummy rotator so the app/UI can be built without

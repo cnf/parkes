@@ -6,8 +6,9 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 class ManagedProcess:
     """Starts, stops, and tails the log of a single long-running
-    subprocess -- shared by AutotrackProcess and SoapyRemoteServer, which
-    otherwise differ only in which command they launch.
+    subprocess -- shared by SoapyRemoteServer and the Pass Orchestrator's
+    per-pass and standalone app launches, which otherwise differ only in
+    which command they launch.
     """
 
     def __init__(self):

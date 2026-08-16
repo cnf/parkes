@@ -1,18 +1,9 @@
 (() => {
-  const statusEl = document.getElementById("orch-status");
-  const dotEl = document.getElementById("orch-dot");
-  const startBtn = document.getElementById("orch-start-btn");
-  const stopBtn = document.getElementById("orch-stop-btn");
-  const currentEl = document.getElementById("orch-current");
-  const profilesList = document.getElementById("profiles-list");
-  const addProfileBtn = document.getElementById("add-profile-btn");
-  const saveProfilesBtn = document.getElementById("save-profiles-btn");
-  const profilesStatus = document.getElementById("profiles-status");
-
-  // In-memory as a name-carrying array rather than the {name: {...}} shape
-  // the API uses -- easier to render/edit while a name is mid-rename or
-  // temporarily blank than juggling object keys.
-  let profiles = [];
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
 
   async function apiFetch(path, options) {
     const res = await fetch(path, options);
@@ -22,145 +13,732 @@
     return res.json();
   }
 
-  async function refreshStatus() {
-    const status = await apiFetch("/api/orchestrator/status");
-    statusEl.textContent = status.running ? status.status : "stopped";
-    dotEl.classList.toggle("on", status.running);
-    startBtn.disabled = status.running;
-    stopBtn.disabled = !status.running;
-    currentEl.textContent = status.current_target ? `tracking: ${status.current_target}` : " ";
+  function flashStatus(el, text, isError) {
+    el.textContent = text;
+    el.style.color = isError ? "var(--danger)" : "var(--text-muted)";
+    if (!isError) {
+      setTimeout(() => {
+        if (el.textContent === text) el.textContent = "";
+      }, 2000);
+    }
   }
 
-  startBtn.addEventListener("click", async () => {
+  function slugify(text) {
+    return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "profile";
+  }
+
+  function uniqueId(base, taken) {
+    let id = base;
+    let n = 2;
+    while (taken.has(id)) {
+      id = `${base}-${n}`;
+      n++;
+    }
+    return id;
+  }
+
+  // ---------------------------------------------------------------------
+  // Pass Orchestrator status/start/stop
+  // ---------------------------------------------------------------------
+
+  const orchStatusEl = document.getElementById("orch-status");
+  const orchDotEl = document.getElementById("orch-dot");
+  const orchStartBtn = document.getElementById("orch-start-btn");
+  const orchStopBtn = document.getElementById("orch-stop-btn");
+  const orchCurrentEl = document.getElementById("orch-current");
+
+  async function refreshOrchStatus() {
+    const status = await apiFetch("/api/orchestrator/status");
+    orchStatusEl.textContent = status.running ? status.status : "stopped";
+    orchDotEl.classList.toggle("on", status.running);
+    orchStartBtn.disabled = status.running;
+    orchStopBtn.disabled = !status.running;
+    orchCurrentEl.textContent = status.current_target ? `tracking: ${status.current_target}` : " ";
+  }
+
+  orchStartBtn.addEventListener("click", async () => {
     try {
       await apiFetch("/api/orchestrator/start", { method: "POST" });
     } catch (err) {
-      statusEl.textContent = `error: ${err.message}`;
-      dotEl.classList.add("error");
+      orchStatusEl.textContent = `error: ${err.message}`;
+      orchDotEl.classList.add("error");
       return;
     }
-    refreshStatus();
+    refreshOrchStatus();
   });
 
-  stopBtn.addEventListener("click", async () => {
+  orchStopBtn.addEventListener("click", async () => {
     await apiFetch("/api/orchestrator/stop", { method: "POST" });
-    refreshStatus();
+    refreshOrchStatus();
   });
 
-  function renderProfiles() {
-    profilesList.innerHTML = "";
-    profiles.forEach((profile, profileIndex) => {
-      const card = document.createElement("div");
-      card.className = "group-block";
+  // ---------------------------------------------------------------------
+  // App Profiles -- loaded first since Tracked Satellites' downlink "app"
+  // dropdown needs the current list of pass-mode profiles.
+  //
+  // Each profile has a stable `id` (the JSON key, generated once from its
+  // name on first save and never changed again) separate from its
+  // editable `name` -- downlinks reference the id, so renaming a profile
+  // doesn't orphan every satellite pointed at it.
+  // ---------------------------------------------------------------------
 
-      const header = document.createElement("div");
-      header.className = "group-header";
-      const nameInput = document.createElement("input");
-      nameInput.type = "text";
-      nameInput.placeholder = "profile name";
-      nameInput.value = profile.name;
-      nameInput.addEventListener("input", () => {
-        profile.name = nameInput.value;
-      });
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "btn-sm";
-      deleteBtn.textContent = "Delete";
-      deleteBtn.addEventListener("click", () => {
-        profiles.splice(profileIndex, 1);
-        renderProfiles();
-      });
-      header.append(nameInput, deleteBtn);
-      card.appendChild(header);
+  const profilesListView = document.getElementById("profiles-list-view");
+  const profilesEditView = document.getElementById("profiles-edit-view");
+  const profilesTableBody = document.getElementById("profiles-table-body");
+  const addProfileBtn = document.getElementById("add-profile-btn");
+  const profilesStatus = document.getElementById("profiles-status");
 
-      const chipList = document.createElement("div");
-      chipList.className = "chip-list";
-      profile.command.forEach((arg, argIndex) => {
-        const chip = document.createElement("span");
-        chip.className = "chip";
-        chip.append(document.createTextNode(arg));
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.textContent = "×";
-        removeBtn.addEventListener("click", () => {
-          profile.command.splice(argIndex, 1);
-          renderProfiles();
+  let profiles = [];
+  let standaloneStatus = {};
+  let profilesEditIndex = null;
+  let profilesEditSnapshot = null;
+
+  function passModeProfiles() {
+    return profiles.filter((p) => p.mode !== "standalone");
+  }
+
+  function applyStandaloneStatus(row, id) {
+    const statusSpan = row.querySelector('[data-role="status"]');
+    if (!statusSpan) return;
+    const running = !!standaloneStatus[id];
+    statusSpan.textContent = running ? "running" : "stopped";
+    const startBtn = row.querySelector('[data-action="start"]');
+    const stopBtn = row.querySelector('[data-action="stop"]');
+    if (startBtn) startBtn.disabled = running;
+    if (stopBtn) stopBtn.disabled = !running;
+  }
+
+  async function refreshStandaloneStatus() {
+    standaloneStatus = await apiFetch("/api/orchestrator/standalone/status");
+    for (const row of profilesTableBody.querySelectorAll("tr[data-profile-id]")) {
+      applyStandaloneStatus(row, row.dataset.profileId);
+    }
+  }
+
+  function assignProfileIds() {
+    const taken = new Set(profiles.filter((p) => p.id).map((p) => p.id));
+    for (const profile of profiles) {
+      if (!profile.id) {
+        profile.id = uniqueId(slugify(profile.name), taken);
+        taken.add(profile.id);
+      }
+    }
+  }
+
+  async function saveProfiles() {
+    assignProfileIds();
+    const payload = {};
+    for (const profile of profiles) {
+      payload[profile.id] = {
+        name: profile.name.trim(),
+        command: profile.command,
+        mode: profile.mode,
+        ...(profile.mode === "standalone" && profile.scheduleMinutes
+          ? { schedule_seconds: profile.scheduleMinutes * 60 }
+          : {}),
+      };
+    }
+    await apiFetch("/api/orchestrator/app_profiles", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    flashStatus(profilesStatus, "saved", false);
+    // Names/modes may have changed; leave an in-progress satellite edit
+    // alone rather than yanking the view out from under it.
+    if (trackedEditIndex === null) renderTrackedList();
+  }
+
+  function validateProfiles() {
+    if (profiles.some((p) => !p.name.trim())) return "every profile needs a name";
+    if (profiles.some((p) => p.command.length === 0)) return "every profile needs at least one command arg";
+    return null;
+  }
+
+  function renderProfilesList() {
+    profilesListView.style.display = "";
+    profilesEditView.style.display = "none";
+    profilesEditView.innerHTML = "";
+    profilesTableBody.innerHTML = "";
+
+    if (profiles.length === 0) {
+      profilesTableBody.innerHTML = `<tr><td colspan="4" class="hint">No app profiles yet.</td></tr>`;
+      return;
+    }
+
+    profiles.forEach((profile, index) => {
+      const row = document.createElement("tr");
+      row.dataset.profileId = profile.id;
+
+      const nameTd = document.createElement("td");
+      nameTd.textContent = profile.name;
+
+      const modeTd = document.createElement("td");
+      const badge = document.createElement("span");
+      badge.className = "badge " + (profile.mode === "standalone" ? "down" : "up");
+      badge.textContent = profile.mode === "standalone" ? "Standalone" : "Pass-triggered";
+      modeTd.appendChild(badge);
+
+      const statusTd = document.createElement("td");
+      if (profile.mode === "standalone") {
+        const statusSpan = document.createElement("span");
+        statusSpan.className = "profile-standalone-status";
+        statusSpan.dataset.role = "status";
+        const startBtn = document.createElement("button");
+        startBtn.type = "button";
+        startBtn.className = "btn-sm";
+        startBtn.textContent = "Start";
+        startBtn.dataset.action = "start";
+        startBtn.addEventListener("click", async () => {
+          try {
+            await apiFetch(`/api/orchestrator/standalone/${encodeURIComponent(profile.id)}/start`, {
+              method: "POST",
+            });
+          } catch (err) {
+            statusSpan.textContent = `error: ${err.message}`;
+            return;
+          }
+          refreshStandaloneStatus();
         });
-        chip.appendChild(removeBtn);
-        chipList.appendChild(chip);
-      });
-      card.appendChild(chipList);
+        const stopBtn = document.createElement("button");
+        stopBtn.type = "button";
+        stopBtn.className = "btn-sm";
+        stopBtn.textContent = "Stop";
+        stopBtn.dataset.action = "stop";
+        stopBtn.addEventListener("click", async () => {
+          await apiFetch(`/api/orchestrator/standalone/${encodeURIComponent(profile.id)}/stop`, {
+            method: "POST",
+          });
+          refreshStandaloneStatus();
+        });
+        statusTd.append(statusSpan, document.createTextNode(" "), startBtn, stopBtn);
+      }
 
-      const searchWrap = document.createElement("div");
-      searchWrap.className = "group-search";
-      const addInput = document.createElement("input");
-      addInput.type = "text";
-      addInput.placeholder = "Add a command arg, press Enter (e.g. --frequency or {frequency})";
-      addInput.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter") return;
-        event.preventDefault();
-        const value = addInput.value.trim();
-        if (value) {
-          profile.command.push(value);
-          renderProfiles();
-        }
-      });
-      searchWrap.appendChild(addInput);
-      card.appendChild(searchWrap);
+      const editTd = document.createElement("td");
+      editTd.className = "actions-col";
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn-sm";
+      editBtn.textContent = "Edit";
+      editBtn.addEventListener("click", () => enterProfileEdit(index));
+      editTd.appendChild(editBtn);
 
-      profilesList.appendChild(card);
+      row.append(nameTd, modeTd, statusTd, editTd);
+      profilesTableBody.appendChild(row);
+      applyStandaloneStatus(row, profile.id);
     });
   }
 
+  function enterProfileEdit(index) {
+    profilesEditIndex = index;
+    profilesEditSnapshot = JSON.parse(JSON.stringify(profiles[index]));
+    renderProfileEdit();
+  }
+
+  function exitProfileEdit(keepChanges) {
+    if (!keepChanges) {
+      profiles[profilesEditIndex] = profilesEditSnapshot;
+    }
+    profilesEditIndex = null;
+    profilesEditSnapshot = null;
+    renderProfilesList();
+  }
+
+  function renderProfileEdit() {
+    profilesListView.style.display = "none";
+    profilesEditView.style.display = "";
+    profilesEditView.innerHTML = "";
+    const profile = profiles[profilesEditIndex];
+
+    const topRow = document.createElement("div");
+    topRow.className = "row";
+    topRow.style.marginBottom = "0";
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = "btn-sm";
+    backBtn.textContent = "← Back";
+    backBtn.addEventListener("click", () => exitProfileEdit(false));
+    topRow.appendChild(backBtn);
+    profilesEditView.appendChild(topRow);
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "edit-name-input";
+    nameInput.placeholder = "profile name";
+    nameInput.value = profile.name;
+    nameInput.addEventListener("input", () => {
+      profile.name = nameInput.value;
+    });
+    profilesEditView.appendChild(nameInput);
+
+    const modeRow = document.createElement("div");
+    modeRow.className = "profile-mode-row";
+    for (const [value, text] of [["pass", "Pass-triggered"], ["standalone", "Standalone"]]) {
+      const modeLabel = document.createElement("label");
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "profile-edit-mode";
+      radio.value = value;
+      radio.checked = profile.mode === value;
+      radio.addEventListener("change", () => {
+        if (radio.checked) {
+          profile.mode = value;
+          renderProfileEdit();
+        }
+      });
+      modeLabel.append(radio, document.createTextNode(text));
+      modeRow.appendChild(modeLabel);
+    }
+    profilesEditView.appendChild(modeRow);
+
+    const chipList = document.createElement("div");
+    chipList.className = "chip-list";
+    profile.command.forEach((arg, argIndex) => {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.append(document.createTextNode(arg));
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => {
+        profile.command.splice(argIndex, 1);
+        renderProfileEdit();
+      });
+      chip.appendChild(removeBtn);
+      chipList.appendChild(chip);
+    });
+    profilesEditView.appendChild(chipList);
+
+    const searchWrap = document.createElement("div");
+    searchWrap.className = "group-search";
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "Add a command arg, press Enter (e.g. --frequency or {frequency})";
+    addInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const value = addInput.value.trim();
+      if (value) {
+        profile.command.push(value);
+        renderProfileEdit();
+      }
+    });
+    searchWrap.appendChild(addInput);
+    profilesEditView.appendChild(searchWrap);
+
+    if (profile.mode === "standalone") {
+      const scheduleRow = document.createElement("div");
+      scheduleRow.className = "profile-standalone-row";
+      scheduleRow.style.marginTop = "0.8rem";
+      const scheduleInput = document.createElement("input");
+      scheduleInput.type = "number";
+      scheduleInput.min = "1";
+      scheduleInput.placeholder = "manual only";
+      scheduleInput.value = profile.scheduleMinutes ?? "";
+      scheduleInput.addEventListener("input", () => {
+        profile.scheduleMinutes = scheduleInput.value ? Number(scheduleInput.value) : null;
+      });
+      scheduleRow.append(document.createTextNode("Auto-repeat every"), scheduleInput, document.createTextNode("minutes"));
+      profilesEditView.appendChild(scheduleRow);
+    }
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "row";
+    actionsRow.style.marginTop = "1rem";
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "primary";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", async () => {
+      const error = validateProfiles();
+      if (error) {
+        flashStatus(profilesStatus, error, true);
+        return;
+      }
+      try {
+        await saveProfiles();
+      } catch (err) {
+        flashStatus(profilesStatus, `error: ${err.message}`, true);
+        return;
+      }
+      exitProfileEdit(true);
+    });
+    actionsRow.appendChild(saveBtn);
+    profilesEditView.appendChild(actionsRow);
+
+    // Kept apart from Save/Back, deliberately not front-and-center --
+    // deletes should be rare and a little deliberate to reach.
+    const dangerRow = document.createElement("div");
+    dangerRow.className = "row";
+    dangerRow.style.marginTop = "1.5rem";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn-sm";
+    deleteBtn.textContent = "Delete this profile";
+    deleteBtn.addEventListener("click", async () => {
+      profiles.splice(profilesEditIndex, 1);
+      try {
+        await saveProfiles();
+      } catch (err) {
+        flashStatus(profilesStatus, `error: ${err.message}`, true);
+        return;
+      }
+      profilesEditIndex = null;
+      profilesEditSnapshot = null;
+      renderProfilesList();
+    });
+    dangerRow.appendChild(deleteBtn);
+    profilesEditView.appendChild(dangerRow);
+  }
+
   addProfileBtn.addEventListener("click", () => {
-    profiles.push({ name: "", command: [] });
-    renderProfiles();
+    profiles.push({ id: null, name: "", command: [], mode: "pass", scheduleMinutes: null });
+    enterProfileEdit(profiles.length - 1);
   });
 
   async function loadProfiles() {
     const data = await apiFetch("/api/orchestrator/app_profiles");
-    profiles = Object.entries(data).map(([name, profile]) => ({
-      name,
+    profiles = Object.entries(data).map(([id, profile]) => ({
+      id,
+      name: profile.name || id,
       command: [...(profile.command || [])],
+      mode: profile.mode === "standalone" ? "standalone" : "pass",
+      scheduleMinutes: profile.schedule_seconds ? Math.round(profile.schedule_seconds / 60) : null,
     }));
-    renderProfiles();
   }
 
-  saveProfilesBtn.addEventListener("click", async () => {
-    profilesStatus.textContent = "";
-    const names = profiles.map((p) => p.name.trim());
-    if (names.some((n) => !n)) {
-      profilesStatus.textContent = "every profile needs a name";
+  // ---------------------------------------------------------------------
+  // Tracked Satellites
+  // ---------------------------------------------------------------------
+
+  const trackedListView = document.getElementById("tracked-list-view");
+  const trackedEditView = document.getElementById("tracked-edit-view");
+  const trackedTableBody = document.getElementById("tracked-table-body");
+  const searchInput = document.getElementById("tracked-search-input");
+  const searchResults = document.getElementById("tracked-search-results");
+  const trackedStatus = document.getElementById("tracked-status");
+
+  let trackedObjects = [];
+  let trackedEditIndex = null;
+  let trackedEditSnapshot = null;
+
+  function profileName(id) {
+    const profile = profiles.find((p) => p.id === id);
+    return profile ? profile.name : id;
+  }
+
+  function downlinkSummary(obj) {
+    if (obj.downlinks.length === 0) return "no downlinks";
+    if (obj.downlinks.length === 1) {
+      const d = obj.downlinks[0];
+      const freq = (d.frequency / 1e6).toFixed(3) + " MHz";
+      return d.app ? `${freq} → ${profileName(d.app)}` : freq;
+    }
+    return `${obj.downlinks.length} downlinks`;
+  }
+
+  async function saveTrackedObjects() {
+    const payload = trackedObjects.map((obj) => ({
+      norad: obj.norad,
+      name: obj.name,
+      enabled: obj.enabled,
+      downlinks: obj.downlinks.map((downlink) => ({
+        frequency: downlink.frequency,
+        app: downlink.app,
+      })),
+    }));
+    await apiFetch("/api/orchestrator/objects", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    flashStatus(trackedStatus, "saved", false);
+  }
+
+  function renderTrackedList() {
+    trackedListView.style.display = "";
+    trackedEditView.style.display = "none";
+    trackedEditView.innerHTML = "";
+    trackedTableBody.innerHTML = "";
+
+    if (trackedObjects.length === 0) {
+      trackedTableBody.innerHTML = `<tr><td colspan="4" class="hint">No satellites tracked yet -- search below to add one.</td></tr>`;
       return;
     }
-    if (new Set(names).size !== names.length) {
-      profilesStatus.textContent = "profile names must be unique";
-      return;
-    }
-    if (profiles.some((p) => p.command.length === 0)) {
-      profilesStatus.textContent = "every profile needs at least one command arg";
-      return;
-    }
-    const payload = {};
-    for (const profile of profiles) {
-      payload[profile.name.trim()] = { command: profile.command };
-    }
-    try {
-      await apiFetch("/api/orchestrator/app_profiles", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+
+    trackedObjects.forEach((obj, index) => {
+      const row = document.createElement("tr");
+
+      const cbTd = document.createElement("td");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = obj.enabled;
+      cb.addEventListener("change", async () => {
+        obj.enabled = cb.checked;
+        try {
+          await saveTrackedObjects();
+        } catch (err) {
+          flashStatus(trackedStatus, `error: ${err.message}`, true);
+        }
       });
-      profilesStatus.textContent = "saved";
-      setTimeout(() => {
-        profilesStatus.textContent = "";
-      }, 2000);
-    } catch (err) {
-      profilesStatus.textContent = `error: ${err.message}`;
+      cbTd.appendChild(cb);
+
+      const nameTd = document.createElement("td");
+      nameTd.innerHTML = `${escapeHtml(obj.name)} <span class="tracked-norad">(${obj.norad})</span>`;
+
+      const downlinkTd = document.createElement("td");
+      downlinkTd.textContent = downlinkSummary(obj);
+
+      const editTd = document.createElement("td");
+      editTd.className = "actions-col";
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn-sm";
+      editBtn.textContent = "Edit";
+      editBtn.addEventListener("click", () => enterTrackedEdit(index));
+      editTd.appendChild(editBtn);
+
+      row.append(cbTd, nameTd, downlinkTd, editTd);
+      trackedTableBody.appendChild(row);
+    });
+  }
+
+  function enterTrackedEdit(index) {
+    trackedEditIndex = index;
+    trackedEditSnapshot = JSON.parse(JSON.stringify(trackedObjects[index]));
+    renderTrackedEdit();
+  }
+
+  function exitTrackedEdit(keepChanges) {
+    if (!keepChanges) {
+      trackedObjects[trackedEditIndex] = trackedEditSnapshot;
+    }
+    trackedEditIndex = null;
+    trackedEditSnapshot = null;
+    renderTrackedList();
+  }
+
+  function renderTrackedEdit() {
+    trackedListView.style.display = "none";
+    trackedEditView.style.display = "";
+    trackedEditView.innerHTML = "";
+    const obj = trackedObjects[trackedEditIndex];
+
+    const topRow = document.createElement("div");
+    topRow.className = "row";
+    topRow.style.marginBottom = "0";
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = "btn-sm";
+    backBtn.textContent = "← Back";
+    backBtn.addEventListener("click", () => exitTrackedEdit(false));
+    topRow.appendChild(backBtn);
+    trackedEditView.appendChild(topRow);
+
+    const heading = document.createElement("div");
+    heading.className = "edit-name-input";
+    heading.style.cssText = "border: none; padding-left: 0; font-weight: 600;";
+    heading.textContent = `${obj.name} (NORAD ${obj.norad})`;
+    trackedEditView.appendChild(heading);
+
+    if (obj.downlinks.length > 0) {
+      const head = document.createElement("div");
+      head.className = "downlink-row downlink-row-head";
+      head.innerHTML = `<span class="field-label">Freq (Hz)</span><span class="field-label">app</span>`;
+      trackedEditView.appendChild(head);
+    }
+
+    const passProfiles = passModeProfiles();
+    obj.downlinks.forEach((downlink, downlinkIndex) => {
+      const row = document.createElement("div");
+      row.className = "downlink-row";
+
+      const freqInput = document.createElement("input");
+      freqInput.type = "number";
+      freqInput.step = "1";
+      freqInput.value = downlink.frequency;
+      freqInput.title = "Frequency (Hz)";
+      freqInput.addEventListener("input", () => {
+        downlink.frequency = Number(freqInput.value);
+      });
+
+      const appSelect = document.createElement("select");
+      appSelect.title = "Pass Orchestrator app profile";
+      const noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = "(no app)";
+      appSelect.appendChild(noneOpt);
+      for (const p of passProfiles) {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        appSelect.appendChild(opt);
+      }
+      if (downlink.app && !passProfiles.some((p) => p.id === downlink.app)) {
+        const existing = profiles.find((p) => p.id === downlink.app);
+        const opt = document.createElement("option");
+        opt.value = downlink.app;
+        opt.textContent = existing ? `${existing.name} (standalone)` : `${downlink.app} (missing)`;
+        appSelect.appendChild(opt);
+      }
+      appSelect.value = downlink.app;
+      appSelect.addEventListener("change", () => {
+        downlink.app = appSelect.value;
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn-sm";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => {
+        obj.downlinks.splice(downlinkIndex, 1);
+        renderTrackedEdit();
+      });
+
+      row.append(freqInput, appSelect, removeBtn);
+      trackedEditView.appendChild(row);
+    });
+
+    const addDownlinkBtn = document.createElement("button");
+    addDownlinkBtn.type = "button";
+    addDownlinkBtn.className = "btn-sm";
+    addDownlinkBtn.textContent = "+ Add downlink";
+    addDownlinkBtn.addEventListener("click", () => {
+      obj.downlinks.push({ frequency: 137500000, app: "" });
+      renderTrackedEdit();
+    });
+    trackedEditView.appendChild(addDownlinkBtn);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "row";
+    actionsRow.style.marginTop = "1rem";
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "primary";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", async () => {
+      try {
+        await saveTrackedObjects();
+      } catch (err) {
+        flashStatus(trackedStatus, `error: ${err.message}`, true);
+        return;
+      }
+      exitTrackedEdit(true);
+    });
+    actionsRow.appendChild(saveBtn);
+    trackedEditView.appendChild(actionsRow);
+
+    // Kept apart from Save/Back, deliberately not front-and-center --
+    // deletes should be rare and a little deliberate to reach.
+    const dangerRow = document.createElement("div");
+    dangerRow.className = "row";
+    dangerRow.style.marginTop = "1.5rem";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn-sm";
+    deleteBtn.textContent = "Delete this satellite";
+    deleteBtn.addEventListener("click", async () => {
+      trackedObjects.splice(trackedEditIndex, 1);
+      try {
+        await saveTrackedObjects();
+      } catch (err) {
+        flashStatus(trackedStatus, `error: ${err.message}`, true);
+        return;
+      }
+      trackedEditIndex = null;
+      trackedEditSnapshot = null;
+      renderTrackedList();
+    });
+    dangerRow.appendChild(deleteBtn);
+    trackedEditView.appendChild(dangerRow);
+  }
+
+  async function loadObjects() {
+    const data = await apiFetch("/api/orchestrator/objects");
+    trackedObjects = data.map((obj) => ({
+      norad: obj.norad,
+      name: obj.name || "",
+      enabled: obj.enabled !== false,
+      downlinks: (obj.downlinks || []).map((downlink) => ({
+        frequency: downlink.frequency ?? 137500000,
+        app: downlink.app || "",
+      })),
+    }));
+    // Older saved files predate the "name" field -- backfill display names
+    // from the TLE catalog rather than showing a bare NORAD id for them.
+    await Promise.all(
+      trackedObjects
+        .filter((obj) => !obj.name)
+        .map(async (obj) => {
+          try {
+            const results = await apiFetch(`/api/tracking/satellites/search?q=${obj.norad}`);
+            const match = results.find((sat) => sat.norad === obj.norad);
+            obj.name = match ? match.name : `NORAD ${obj.norad}`;
+          } catch {
+            obj.name = `NORAD ${obj.norad}`;
+          }
+        })
+    );
+  }
+
+  function hideSearchResults() {
+    searchResults.style.display = "none";
+    searchResults.innerHTML = "";
+  }
+
+  let searchDebounce;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(searchDebounce);
+    const q = searchInput.value.trim();
+    if (!q) {
+      hideSearchResults();
+      return;
+    }
+    searchDebounce = setTimeout(async () => {
+      const results = await apiFetch(`/api/tracking/satellites/search?q=${encodeURIComponent(q)}`);
+      searchResults.innerHTML = "";
+      for (const sat of results.slice(0, 20)) {
+        const row = document.createElement("div");
+        row.className = "search-result-row";
+        row.innerHTML = `<span>${escapeHtml(sat.name)}</span><span style="color: var(--text-muted);">${sat.norad}</span>`;
+        row.addEventListener("click", () => {
+          searchInput.value = "";
+          hideSearchResults();
+          if (trackedObjects.some((obj) => obj.norad === sat.norad)) {
+            flashStatus(trackedStatus, `${sat.name} is already tracked`, true);
+            return;
+          }
+          trackedObjects.push({
+            norad: sat.norad,
+            name: sat.name,
+            enabled: true,
+            downlinks: [{ frequency: 137500000, app: "" }],
+          });
+          enterTrackedEdit(trackedObjects.length - 1);
+        });
+        searchResults.appendChild(row);
+      }
+      searchResults.style.display = results.length ? "block" : "none";
+    }, 250);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target !== searchInput && !searchResults.contains(event.target)) {
+      hideSearchResults();
     }
   });
 
-  loadProfiles();
-  refreshStatus();
-  setInterval(refreshStatus, 5000);
+  // ---------------------------------------------------------------------
+
+  async function init() {
+    await Promise.all([loadProfiles(), loadObjects()]);
+    renderProfilesList();
+    renderTrackedList();
+    await refreshStandaloneStatus();
+  }
+
+  init();
+  refreshOrchStatus();
+  setInterval(refreshOrchStatus, 5000);
+  setInterval(refreshStandaloneStatus, 5000);
 })();
