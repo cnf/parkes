@@ -55,9 +55,19 @@ class SkyTracker:
 
     def _current_topos(self):
         prefs = preferences.get_all()
-        return wgs84.latlon(
-            prefs["observer_lat"], prefs["observer_lon"], prefs["observer_elevation_m"]
-        )
+        if prefs["observer_location_mode"] == "manual":
+            lat, lon, elevation = (
+                prefs["observer_manual_lat"],
+                prefs["observer_manual_lon"],
+                prefs["observer_manual_elevation_m"],
+            )
+        else:
+            lat, lon, elevation = (
+                prefs["observer_lat"],
+                prefs["observer_lon"],
+                prefs["observer_elevation_m"],
+            )
+        return wgs84.latlon(lat, lon, elevation)
 
     def _enabled_satellites(self) -> list[dict]:
         return [

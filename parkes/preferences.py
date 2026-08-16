@@ -13,6 +13,14 @@ DEFAULTS: dict[str, Any] = {
     "observer_lat": settings.observer_lat,
     "observer_lon": settings.observer_lon,
     "observer_elevation_m": settings.observer_elevation_m,
+    # "default" uses observer_lat/lon/elevation_m above; "manual" uses the
+    # values below instead -- kept as a separate set so switching back to
+    # "default" doesn't lose whatever was last set manually. A future
+    # "gpsd" mode would read from a local gpsd daemon instead of either.
+    "observer_location_mode": "default",
+    "observer_manual_lat": settings.observer_lat,
+    "observer_manual_lon": settings.observer_lon,
+    "observer_manual_elevation_m": settings.observer_elevation_m,
     "tracking_interval_seconds": settings.tracking_interval_seconds,
     "satdump_sdr_source": settings.satdump_sdr_source,
     "satdump_sdr_source_id": settings.satdump_sdr_source_id,

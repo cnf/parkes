@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -11,6 +13,10 @@ class UpdateSettingsRequest(BaseModel):
     observer_lat: float | None = None
     observer_lon: float | None = None
     observer_elevation_m: float | None = None
+    observer_location_mode: Literal["default", "manual"] | None = None
+    observer_manual_lat: float | None = None
+    observer_manual_lon: float | None = None
+    observer_manual_elevation_m: float | None = None
     tracking_interval_seconds: float | None = None
     satdump_sdr_source: str | None = None
     satdump_sdr_source_id: str | None = None

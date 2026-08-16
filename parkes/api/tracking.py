@@ -1,7 +1,10 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from parkes.tracking.fixed_targets import FixedTargetStore
+from parkes.tracking.geocode import reverse_geocode
 from parkes.tracking.groups import GroupStore
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
@@ -55,6 +58,11 @@ def _fixed_targets(request: Request) -> FixedTargetStore:
 
 def _sources(request: Request) -> TleSourceStore:
     return request.app.state.tle_sources
+
+
+@router.get("/reverse_geocode")
+async def reverse_geocode_endpoint(lat: float, lon: float):
+    return {"label": await asyncio.to_thread(reverse_geocode, lat, lon)}
 
 
 @router.get("/targets")

@@ -39,7 +39,11 @@
       </div>
       <form id="settings-form">
         <div class="settings-section">
-          <div class="field-label">Observer Location</div>
+          <div class="field-label">Observer Location (default)</div>
+          <p class="hint" style="margin: 0 0 0.6rem;">
+            The fallback used whenever the dashboard's location switcher is set to "Default".
+            Switch to a manual override there without changing this.
+          </p>
           <div class="settings-grid">
             <label>Latitude <input name="observer_lat" type="number" step="0.0001" /></label>
             <label>Longitude <input name="observer_lon" type="number" step="0.0001" /></label>

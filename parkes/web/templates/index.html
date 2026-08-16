@@ -49,6 +49,22 @@
         font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; color: var(--text-muted);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 0 0.8rem;
       }
+
+      button.back-link { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
+      .modal-overlay {
+        position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+        display: none; align-items: center; justify-content: center; z-index: 100; padding: 1rem;
+      }
+      .modal-dialog {
+        background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+        padding: 1.2rem; width: 100%; max-width: 26rem; max-height: 90vh; overflow-y: auto;
+        box-shadow: var(--shadow);
+      }
+      .modal-mode-row { display: flex; gap: 1.2rem; margin: 0.8rem 0 1rem; }
+      .modal-mode-row label { display: flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.9rem; }
+      .modal-mode-row input[type="radio"] { width: auto; accent-color: var(--accent); }
+      .location-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
+      .location-fields input:disabled { opacity: 0.5; }
     </style>
   </head>
   <body>
@@ -56,6 +72,7 @@
       <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
       <h1>{{ app_name }}</h1>
       <nav class="nav-links">
+        <button id="location-btn" class="back-link" type="button">&#128205; Location</button>
         <a href="/orchestrator" class="back-link">Pass Orchestrator</a>
         <a href="/settings" class="back-link">Settings</a>
       </nav>
@@ -156,8 +173,37 @@
       <a href="/orchestrator" class="back-link">Manage orchestrator &rarr;</a>
     </section>
 
+    <div id="location-modal-overlay" class="modal-overlay">
+      <div class="modal-dialog">
+        <div class="card-header">
+          <h2>Observer Location</h2>
+          <button id="location-modal-close" type="button" class="btn-sm">&times;</button>
+        </div>
+        <div class="modal-mode-row">
+          <label><input type="radio" name="location-mode" id="location-mode-default" /> Default</label>
+          <label><input type="radio" name="location-mode" id="location-mode-manual" /> Manual</label>
+        </div>
+        <p class="hint" id="location-default-hint"></p>
+        <div class="location-fields" id="location-manual-fields">
+          <label>Latitude <input id="location-manual-lat" type="number" step="0.0001" /></label>
+          <label>Longitude <input id="location-manual-lon" type="number" step="0.0001" /></label>
+          <label>Elevation (m) <input id="location-manual-elev" type="number" step="1" /></label>
+        </div>
+        <p class="hint" id="location-geocode-hint">&nbsp;</p>
+        <div class="row" style="margin-top: 0.6rem;">
+          <button id="location-use-browser-btn" type="button" class="btn-sm">&#128205; Use my location</button>
+        </div>
+        <p class="hint" id="location-status"></p>
+        <div class="row" style="margin-top: 1rem;">
+          <button id="location-save-btn" class="primary" type="button">Save</button>
+          <button id="location-cancel-btn" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/static/rotator.js"></script>
     <script src="/static/tracking.js"></script>
     <script src="/static/orchestrator-status.js"></script>
+    <script src="/static/location.js"></script>
   </body>
 </html>
