@@ -5,10 +5,12 @@ from parkes.config import settings
 from parkes.preferences import preferences
 
 # A starter set of NOAA APT satellites -- well-known NORAD IDs/frequencies,
-# just enough to demonstrate the pipeline. Edit via /api/satdump/objects.
+# just enough to demonstrate the pipeline. Edit via the Satdump page.
 DEFAULT_TRACKED_OBJECTS = [
     {
-        "norad": 25338,  # NOAA 15
+        "norad": 25338,
+        "name": "NOAA 15",
+        "enabled": True,
         "downlinks": [
             {
                 "frequency": 137620000,
@@ -20,7 +22,9 @@ DEFAULT_TRACKED_OBJECTS = [
         ],
     },
     {
-        "norad": 28654,  # NOAA 18
+        "norad": 28654,
+        "name": "NOAA 18",
+        "enabled": True,
         "downlinks": [
             {
                 "frequency": 137912500,
@@ -32,7 +36,9 @@ DEFAULT_TRACKED_OBJECTS = [
         ],
     },
     {
-        "norad": 33591,  # NOAA 19
+        "norad": 33591,
+        "name": "NOAA 19",
+        "enabled": True,
         "downlinks": [
             {
                 "frequency": 137100000,
@@ -61,6 +67,11 @@ def save_tracked_objects(objects: list[dict]) -> None:
 
 
 def build_autotrack_config(tracked_objects: list[dict]) -> dict:
+    """Builds satdump's own autotrack config from the shared tracked_objects
+    list -- disabled objects, and downlinks with no pipeline_name (i.e. ones
+    only meant for the Pass Orchestrator's "app" field, not satdump's own
+    engine), are left out rather than forwarded as-is.
+    """
     prefs = preferences.get_all()
     parameters = {
         "samplerate": prefs["satdump_samplerate"],
@@ -70,6 +81,23 @@ def build_autotrack_config(tracked_objects: list[dict]) -> dict:
     if prefs["satdump_sdr_source_id"]:
         parameters["source_id"] = prefs["satdump_sdr_source_id"]
 
+    satdump_objects = []
+    for obj in tracked_objects:
+        if not obj.get("enabled", True):
+            continue
+        downlinks = [
+            {
+                "frequency": downlink["frequency"],
+                "live": downlink.get("live", True),
+                "record": downlink.get("record", False),
+                "pipeline_name": downlink["pipeline_name"],
+            }
+            for downlink in obj.get("downlinks", [])
+            if downlink.get("pipeline_name")
+        ]
+        if downlinks:
+            satdump_objects.append({"norad": obj["norad"], "downlinks": downlinks})
+
     return {
         "parameters": parameters,
         "output_folder": settings.satdump_output_dir,
@@ -78,7 +106,7 @@ def build_autotrack_config(tracked_objects: list[dict]) -> dict:
             "lat": prefs["observer_lat"],
             "alt": prefs["observer_elevation_m"],
         },
-        "tracked_objects": tracked_objects,
+        "tracked_objects": satdump_objects,
         "tracking": {
             "autotrack_cfg": {
                 "autotrack_min_elevation": prefs["satdump_autotrack_min_elevation"],

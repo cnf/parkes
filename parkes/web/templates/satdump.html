@@ -6,13 +6,23 @@
     <title>{{ app_name }} &middot; Satdump</title>
     <link rel="stylesheet" href="/static/style.css" />
     <style>
-      #satdump-objects { width: 100%; height: 14rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82rem; resize: vertical; }
       #satdump-log {
         width: 100%; height: 22rem; overflow-y: auto; margin: 0;
         background: #0d0e10; color: #d7d7da; border: 1px solid var(--border); border-radius: 8px;
         font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; line-height: 1.5;
         padding: 0.75rem; white-space: pre-wrap;
       }
+      .downlink-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
+      .downlink-row input[type="number"] { width: 9.5rem; }
+      .downlink-row input[type="text"] { width: 8.5rem; }
+      .downlink-row select { width: 9.5rem; }
+      .downlink-row-head span { flex: 0 0 auto; }
+      .downlink-row-head span:nth-child(1) { width: 9.5rem; }
+      .downlink-row-head span:nth-child(2) { width: 8.5rem; }
+      .downlink-row-head span:nth-child(3) { width: 9.5rem; }
+      .downlink-flag { display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: var(--text-muted); }
+      .downlink-flag input { width: auto; accent-color: var(--accent); }
+      .tracked-norad { color: var(--text-muted); font-weight: normal; font-size: 0.8rem; }
     </style>
   </head>
   <body>
@@ -35,10 +45,19 @@
         <button id="satdump-start-btn" class="primary">Start</button>
         <button id="satdump-stop-btn" disabled>Stop</button>
       </div>
-      <div class="field-label">Tracked objects (JSON)</div>
-      <textarea id="satdump-objects"></textarea>
+      <div class="field-label">Tracked Satellites</div>
+      <p class="hint">
+        Feeds both Satdump Autotrack (via each downlink's satdump pipeline id) and the
+        <a href="/orchestrator">Pass Orchestrator</a> (via its app profile -- manage those there).
+        Disable an entry to keep its config without deleting it.
+      </p>
+      <div id="tracked-list"></div>
+      <div class="group-search">
+        <input id="tracked-search-input" type="text" placeholder="Search satellites to add..." autocomplete="off" />
+        <div id="tracked-search-results" class="search-results" style="display: none;"></div>
+      </div>
       <div class="row" style="margin-top: 0.6rem;">
-        <button id="satdump-save-objects-btn">Save objects</button>
+        <button id="satdump-save-objects-btn" class="primary">Save objects</button>
         <span id="satdump-objects-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
       </div>
 

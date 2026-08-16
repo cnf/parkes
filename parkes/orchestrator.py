@@ -89,6 +89,8 @@ class PassOrchestrator:
         min_elevation = preferences.get("satdump_autotrack_min_elevation")
         best: tuple[str, dict, dict] | None = None
         for obj in load_tracked_objects():
+            if not obj.get("enabled", True):
+                continue
             target_id = f"sat:{obj['norad']}"
             for downlink in obj.get("downlinks", []):
                 try:
