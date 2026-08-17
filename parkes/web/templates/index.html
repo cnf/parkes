@@ -151,6 +151,7 @@
         <div class="modal-mode-row">
           <label><input type="radio" name="location-mode" id="location-mode-default" /> Default</label>
           <label><input type="radio" name="location-mode" id="location-mode-manual" /> Manual</label>
+          <label><input type="radio" name="location-mode" id="location-mode-gpsd" /> GPS (gpsd)</label>
         </div>
         <p class="hint" id="location-default-hint"></p>
         <div class="location-fields" id="location-manual-fields">
@@ -159,6 +160,7 @@
           <label>Elevation (m) <input id="location-manual-elev" type="number" step="1" /></label>
         </div>
         <p class="hint" id="location-geocode-hint">&nbsp;</p>
+        <p class="hint" id="location-gpsd-hint" style="display: none;"></p>
         <div class="row" style="margin-top: 0.6rem;">
           <button id="location-use-browser-btn" type="button" class="btn-sm">&#128205; Use my location</button>
         </div>

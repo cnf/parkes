@@ -34,11 +34,16 @@ class SkyTracker:
     """
 
     def __init__(
-        self, tle_catalog: TleCatalog, group_store: GroupStore, fixed_target_store: FixedTargetStore
+        self,
+        tle_catalog: TleCatalog,
+        group_store: GroupStore,
+        fixed_target_store: FixedTargetStore,
+        gpsd_client=None,
     ):
         self._tle_catalog = tle_catalog
         self._groups = group_store
         self._fixed_targets = fixed_target_store
+        self._gpsd = gpsd_client
 
         data_dir = Path(settings.skyfield_data_dir)
         data_dir.mkdir(parents=True, exist_ok=True)
@@ -53,21 +58,47 @@ class SkyTracker:
                 ra_hours=source.ra_hours, dec_degrees=source.dec_degrees
             )
 
-    def _current_topos(self):
+    def current_location(self) -> tuple[float, float, float, str]:
+        """The observer lat/lon/elevation actually in effect right now,
+        plus which source produced it -- "gpsd" only when that mode is
+        selected *and* has a fix no older than GpsdClient's staleness
+        window; "manual"/"default" otherwise, same as before gpsd support
+        existed. Exposed separately from _current_topos() so the Settings
+        API can show live gpsd status without duplicating this logic.
+        """
         prefs = preferences.get_all()
-        if prefs["observer_location_mode"] == "manual":
-            lat, lon, elevation = (
+        mode = prefs["observer_location_mode"]
+        if mode == "manual":
+            return (
                 prefs["observer_manual_lat"],
                 prefs["observer_manual_lon"],
                 prefs["observer_manual_elevation_m"],
+                "manual",
             )
-        else:
-            lat, lon, elevation = (
-                prefs["observer_lat"],
-                prefs["observer_lon"],
-                prefs["observer_elevation_m"],
+        if mode == "gpsd" and self._gpsd is not None and self._gpsd.has_fresh_fix:
+            return (
+                self._gpsd.lat,
+                self._gpsd.lon,
+                self._gpsd.altitude_m if self._gpsd.altitude_m is not None else prefs["observer_elevation_m"],
+                "gpsd",
             )
+        return (prefs["observer_lat"], prefs["observer_lon"], prefs["observer_elevation_m"], "default")
+
+    def _current_topos(self):
+        lat, lon, elevation, _source = self.current_location()
         return wgs84.latlon(lat, lon, elevation)
+
+    def azel_of_point(self, lat: float, lon: float, elevation_m: float) -> tuple[float, float]:
+        """az/el of an arbitrary fixed ground point (not a satellite or sky
+        object) as seen from the current observer location right now --
+        the same site-to-site geometry skyfield uses for satellites, just
+        with a second wgs84.latlon() instead of an orbit. Used by Static
+        Positions' lat/lon/alt input mode (see api/orchestrator.py).
+        """
+        t = self._timescale.now()
+        topocentric = (wgs84.latlon(lat, lon, elevation_m) - self._current_topos()).at(t)
+        alt, az, _distance = topocentric.altaz()
+        return float(az.degrees), float(alt.degrees)
 
     def _enabled_satellites(self) -> list[dict]:
         return [

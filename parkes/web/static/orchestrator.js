@@ -565,6 +565,10 @@
     return profiles.filter((p) => p.mode !== "standalone");
   }
 
+  function standaloneProfiles() {
+    return profiles.filter((p) => p.mode === "standalone");
+  }
+
   function applyStandaloneStatus(row, id) {
     const statusSpan = row.querySelector('[data-role="status"]');
     if (!statusSpan) return;
@@ -589,6 +593,7 @@
     for (const row of profilesTableBody.querySelectorAll("tr[data-profile-id]")) {
       applyStandaloneStatus(row, row.dataset.profileId);
     }
+    refreshPositionsStatus();
   }
 
   function assignProfileId(profile) {
@@ -1321,6 +1326,433 @@
   });
 
   // ---------------------------------------------------------------------
+  // Static Positions -- named, fixed az/el shortcuts. Manual-only: never
+  // read by the Pass Orchestrator, so there's no scheduling/priority
+  // concept here, just a list.
+  // ---------------------------------------------------------------------
+
+  const positionsListView = document.getElementById("positions-list-view");
+  const positionsEditView = document.getElementById("positions-edit-view");
+  const positionsTableBody = document.getElementById("positions-table-body");
+  const addPositionBtn = document.getElementById("add-position-btn");
+  const positionsStatus = document.getElementById("positions-status");
+
+  let staticPositions = [];
+  let positionsEditIndex = null;
+  let positionsEditSnapshot = null;
+
+  async function loadStaticPositions() {
+    const data = await apiFetch("/api/orchestrator/static_positions");
+    staticPositions = Object.entries(data).map(([id, position]) => ({
+      id,
+      name: position.name || id,
+      positionMode: position.position_mode === "latlon" ? "latlon" : "azel",
+      az: position.az,
+      el: position.el,
+      lat: position.lat ?? null,
+      lon: position.lon ?? null,
+      altM: position.alt_m ?? 0,
+      app: position.app || "",
+      frequency: position.frequency ?? null,
+    }));
+  }
+
+  function assignPositionId(position) {
+    if (position.id) return position.id;
+    const taken = new Set(staticPositions.filter((p) => p.id).map((p) => p.id));
+    position.id = uniqueId(slugify(position.name), taken);
+    return position.id;
+  }
+
+  async function savePosition(position) {
+    assignPositionId(position);
+    const payload = {
+      name: position.name.trim(),
+      position_mode: position.positionMode,
+      app: position.app || null,
+      frequency: position.frequency || null,
+      ...(position.positionMode === "latlon"
+        ? { lat: position.lat, lon: position.lon, alt_m: position.altM || 0 }
+        : { az: position.az, el: position.el }),
+    };
+    await apiFetch(`/api/orchestrator/static_positions/${encodeURIComponent(position.id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    flashStatus(positionsStatus, "saved", false);
+  }
+
+  async function deletePosition(id) {
+    await apiFetch(`/api/orchestrator/static_positions/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  function validatePosition(position) {
+    if (!position.name.trim()) return "every position needs a name";
+    if (position.positionMode === "latlon") {
+      if (!Number.isFinite(position.lat) || !Number.isFinite(position.lon)) {
+        return "lat and lon must be numbers";
+      }
+    } else if (!Number.isFinite(position.az) || !Number.isFinite(position.el)) {
+      return "az and el must be numbers";
+    }
+    return null;
+  }
+
+  function applyPositionStatus(row, appId) {
+    const goBtn = row.querySelector('[data-action="go"]');
+    const stopBtn = row.querySelector('[data-action="stop"]');
+    if (!stopBtn) return;
+    const running = appId ? !!(standaloneStatus[appId] && standaloneStatus[appId].state === "running") : false;
+    stopBtn.disabled = !running;
+    if (goBtn) goBtn.disabled = false;
+  }
+
+  function refreshPositionsStatus() {
+    for (const row of positionsTableBody.querySelectorAll("tr[data-position-id]")) {
+      const position = staticPositions.find((p) => p.id === row.dataset.positionId);
+      applyPositionStatus(row, position && position.app);
+    }
+  }
+
+  function renderPositionsList() {
+    positionsListView.style.display = "";
+    positionsEditView.style.display = "none";
+    positionsEditView.innerHTML = "";
+    positionsTableBody.innerHTML = "";
+
+    if (staticPositions.length === 0) {
+      positionsTableBody.innerHTML = `<tr><td colspan="5" class="hint">No static positions yet.</td></tr>`;
+      return;
+    }
+
+    staticPositions.forEach((position, index) => {
+      const row = document.createElement("tr");
+      row.dataset.positionId = position.id;
+
+      const nameTd = document.createElement("td");
+      nameTd.textContent = position.name;
+
+      const azElTd = document.createElement("td");
+      azElTd.className = "position-az-el";
+      azElTd.textContent = `${position.az.toFixed(1)}° / ${position.el.toFixed(1)}°`;
+
+      const appTd = document.createElement("td");
+      appTd.textContent = position.app
+        ? profileName(position.app) + (position.frequency ? ` @ ${(position.frequency / 1e6).toFixed(3)} MHz` : "")
+        : "—";
+
+      const actionsTd = document.createElement("td");
+      const goBtn = document.createElement("button");
+      goBtn.type = "button";
+      goBtn.className = "btn-sm";
+      goBtn.textContent = "Go";
+      goBtn.dataset.action = "go";
+      goBtn.addEventListener("click", async () => {
+        goBtn.disabled = true;
+        try {
+          await apiFetch(`/api/orchestrator/static_positions/${encodeURIComponent(position.id)}/go`, {
+            method: "POST",
+          });
+          flashStatus(positionsStatus, `${position.name}: on the way`, false);
+        } catch (err) {
+          flashStatus(positionsStatus, `error: ${err.message}`, true);
+        }
+        goBtn.disabled = false;
+        refreshStandaloneStatus();
+      });
+      actionsTd.appendChild(goBtn);
+      if (position.app) {
+        const stopBtn = document.createElement("button");
+        stopBtn.type = "button";
+        stopBtn.className = "btn-sm";
+        stopBtn.textContent = "Stop";
+        stopBtn.dataset.action = "stop";
+        stopBtn.style.marginLeft = "0.3rem";
+        stopBtn.addEventListener("click", async () => {
+          await apiFetch(`/api/orchestrator/static_positions/${encodeURIComponent(position.id)}/stop`, {
+            method: "POST",
+          });
+          refreshStandaloneStatus();
+        });
+        actionsTd.appendChild(stopBtn);
+      }
+
+      const editTd = document.createElement("td");
+      editTd.className = "actions-col";
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn-sm";
+      editBtn.textContent = "Edit";
+      editBtn.addEventListener("click", () => enterPositionEdit(index));
+      editTd.appendChild(editBtn);
+
+      row.append(nameTd, azElTd, appTd, actionsTd, editTd);
+      positionsTableBody.appendChild(row);
+      applyPositionStatus(row, position.app);
+    });
+  }
+
+  function enterPositionEdit(index) {
+    positionsEditIndex = index;
+    positionsEditSnapshot = JSON.parse(JSON.stringify(staticPositions[index]));
+    renderPositionEdit();
+  }
+
+  function exitPositionEdit(keepChanges) {
+    if (!keepChanges) {
+      staticPositions[positionsEditIndex] = positionsEditSnapshot;
+    }
+    positionsEditIndex = null;
+    positionsEditSnapshot = null;
+    renderPositionsList();
+  }
+
+  function renderPositionEdit() {
+    positionsListView.style.display = "none";
+    positionsEditView.style.display = "";
+    positionsEditView.innerHTML = "";
+    const position = staticPositions[positionsEditIndex];
+
+    const topRow = document.createElement("div");
+    topRow.className = "row";
+    topRow.style.marginBottom = "0";
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = "btn-sm";
+    backBtn.textContent = "← Back";
+    backBtn.addEventListener("click", () => exitPositionEdit(false));
+    topRow.appendChild(backBtn);
+    positionsEditView.appendChild(topRow);
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "edit-name-input";
+    nameInput.placeholder = "position name";
+    nameInput.value = position.name;
+    nameInput.addEventListener("input", () => {
+      position.name = nameInput.value;
+    });
+    positionsEditView.appendChild(nameInput);
+
+    const modeLabel = document.createElement("div");
+    modeLabel.className = "field-label";
+    modeLabel.textContent = "Position";
+    positionsEditView.appendChild(modeLabel);
+
+    const modeSeg = document.createElement("div");
+    modeSeg.className = "seg-row";
+    for (const [value, text] of [["azel", "Az / El"], ["latlon", "Lat / Lon / Alt"]]) {
+      const modeBtn = document.createElement("button");
+      modeBtn.type = "button";
+      modeBtn.className = "btn-sm" + (position.positionMode === value ? " active" : "");
+      modeBtn.textContent = text;
+      modeBtn.addEventListener("click", () => {
+        position.positionMode = value;
+        renderPositionEdit();
+      });
+      modeSeg.appendChild(modeBtn);
+    }
+    positionsEditView.appendChild(modeSeg);
+
+    const fieldsRow = document.createElement("div");
+    fieldsRow.className = "position-fields";
+
+    if (position.positionMode === "latlon") {
+      const latLabel = document.createElement("label");
+      latLabel.appendChild(document.createTextNode("Latitude"));
+      const latInput = document.createElement("input");
+      latInput.type = "number";
+      latInput.step = "0.0001";
+      latInput.min = "-90";
+      latInput.max = "90";
+      latInput.value = position.lat ?? "";
+      latLabel.appendChild(latInput);
+      fieldsRow.appendChild(latLabel);
+
+      const lonLabel = document.createElement("label");
+      lonLabel.appendChild(document.createTextNode("Longitude"));
+      const lonInput = document.createElement("input");
+      lonInput.type = "number";
+      lonInput.step = "0.0001";
+      lonInput.min = "-180";
+      lonInput.max = "180";
+      lonInput.value = position.lon ?? "";
+      lonLabel.appendChild(lonInput);
+      fieldsRow.appendChild(lonLabel);
+
+      const altLabel = document.createElement("label");
+      altLabel.appendChild(document.createTextNode("Altitude (m)"));
+      const altInput = document.createElement("input");
+      altInput.type = "number";
+      altInput.step = "1";
+      altInput.value = position.altM ?? 0;
+      altLabel.appendChild(altInput);
+      fieldsRow.appendChild(altLabel);
+
+      const azelPreview = document.createElement("p");
+      azelPreview.className = "hint";
+      azelPreview.style.gridColumn = "1 / -1";
+      azelPreview.textContent = " ";
+
+      let previewDebounce;
+      function updatePreview() {
+        position.lat = latInput.value === "" ? NaN : Number(latInput.value);
+        position.lon = lonInput.value === "" ? NaN : Number(lonInput.value);
+        position.altM = altInput.value === "" ? 0 : Number(altInput.value);
+        clearTimeout(previewDebounce);
+        if (!Number.isFinite(position.lat) || !Number.isFinite(position.lon)) {
+          azelPreview.textContent = " ";
+          return;
+        }
+        previewDebounce = setTimeout(async () => {
+          try {
+            const result = await apiFetch(
+              `/api/orchestrator/static_positions/compute_azel?lat=${position.lat}&lon=${position.lon}&alt_m=${position.altM}`
+            );
+            azelPreview.textContent = `→ az ${result.az.toFixed(1)}°, el ${result.el.toFixed(1)}° from here right now`;
+          } catch (err) {
+            azelPreview.textContent = `error: ${err.message}`;
+          }
+        }, 400);
+      }
+      for (const input of [latInput, lonInput, altInput]) {
+        input.addEventListener("input", updatePreview);
+      }
+      updatePreview();
+      fieldsRow.appendChild(azelPreview);
+    } else {
+      const azLabel = document.createElement("label");
+      azLabel.appendChild(document.createTextNode("Azimuth"));
+      const azInput = document.createElement("input");
+      azInput.type = "number";
+      azInput.step = "0.1";
+      azInput.min = "0";
+      azInput.max = "360";
+      azInput.value = position.az;
+      azInput.addEventListener("input", () => {
+        position.az = azInput.value === "" ? NaN : Number(azInput.value);
+      });
+      azLabel.appendChild(azInput);
+      fieldsRow.appendChild(azLabel);
+
+      const elLabel = document.createElement("label");
+      elLabel.appendChild(document.createTextNode("Elevation"));
+      const elInput = document.createElement("input");
+      elInput.type = "number";
+      elInput.step = "0.1";
+      elInput.min = "0";
+      elInput.max = "90";
+      elInput.value = position.el;
+      elInput.addEventListener("input", () => {
+        position.el = elInput.value === "" ? NaN : Number(elInput.value);
+      });
+      elLabel.appendChild(elInput);
+      fieldsRow.appendChild(elLabel);
+    }
+
+    const freqLabel = document.createElement("label");
+    freqLabel.appendChild(document.createTextNode("Frequency (Hz) -- optional"));
+    const freqInput = document.createElement("input");
+    freqInput.type = "number";
+    freqInput.step = "1";
+    freqInput.min = "0";
+    freqInput.placeholder = "for the linked app's {frequency}";
+    freqInput.value = position.frequency ?? "";
+    freqInput.addEventListener("input", () => {
+      position.frequency = freqInput.value === "" ? null : Number(freqInput.value);
+    });
+    freqLabel.appendChild(freqInput);
+    fieldsRow.appendChild(freqLabel);
+
+    const appLabel = document.createElement("label");
+    appLabel.appendChild(document.createTextNode("App (optional, standalone only)"));
+    const appSelect = document.createElement("select");
+    const noneOption = document.createElement("option");
+    noneOption.value = "";
+    noneOption.textContent = "(none -- just move)";
+    appSelect.appendChild(noneOption);
+    for (const profile of standaloneProfiles()) {
+      const optionEl = document.createElement("option");
+      optionEl.value = profile.id;
+      optionEl.textContent = profile.name;
+      optionEl.selected = profile.id === position.app;
+      appSelect.appendChild(optionEl);
+    }
+    appSelect.addEventListener("change", () => {
+      position.app = appSelect.value;
+    });
+    appLabel.appendChild(appSelect);
+    fieldsRow.appendChild(appLabel);
+
+    positionsEditView.appendChild(fieldsRow);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "row";
+    actionsRow.style.marginTop = "1rem";
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "primary";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", async () => {
+      const error = validatePosition(position);
+      if (error) {
+        flashStatus(positionsStatus, error, true);
+        return;
+      }
+      try {
+        await savePosition(position);
+      } catch (err) {
+        flashStatus(positionsStatus, `error: ${err.message}`, true);
+        return;
+      }
+      exitPositionEdit(true);
+    });
+    actionsRow.appendChild(saveBtn);
+    positionsEditView.appendChild(actionsRow);
+
+    // Kept apart from Save/Back, deliberately not front-and-center --
+    // deletes should be rare and a little deliberate to reach.
+    const dangerRow = document.createElement("div");
+    dangerRow.className = "row";
+    dangerRow.style.marginTop = "1.5rem";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn-sm";
+    deleteBtn.textContent = "Delete this position";
+    deleteBtn.addEventListener("click", async () => {
+      try {
+        if (position.id) await deletePosition(position.id);
+      } catch (err) {
+        flashStatus(positionsStatus, `error: ${err.message}`, true);
+        return;
+      }
+      staticPositions.splice(positionsEditIndex, 1);
+      positionsEditIndex = null;
+      positionsEditSnapshot = null;
+      renderPositionsList();
+    });
+    dangerRow.appendChild(deleteBtn);
+    positionsEditView.appendChild(dangerRow);
+  }
+
+  addPositionBtn.addEventListener("click", () => {
+    staticPositions.push({
+      id: null,
+      name: "",
+      positionMode: "azel",
+      az: 0,
+      el: 0,
+      lat: null,
+      lon: null,
+      altM: 0,
+      app: "",
+      frequency: null,
+    });
+    enterPositionEdit(staticPositions.length - 1);
+  });
+
+  // ---------------------------------------------------------------------
   // Pass Overlaps -- a read-only forecast, doesn't feed back into
   // scheduling. Refreshed on load and by hand (passes shift as TLEs
   // refresh/time passes, not worth polling continuously for).
@@ -1381,9 +1813,11 @@
       loadOverlaps(),
       loadSatdumpPipelines(),
       loadCommandModules(),
+      loadStaticPositions(),
     ]);
     renderProfilesList();
     renderTrackedList();
+    renderPositionsList();
     await refreshStandaloneStatus();
   }
 

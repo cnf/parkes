@@ -47,21 +47,28 @@ class StandaloneAppRunner:
         return name in self._processes and self._processes[name].running
 
     def status(self) -> dict[str, dict]:
-        # "crashed" means it exited on its own, without stop() ever being
-        # called for this run -- a deliberate stop() (which sends SIGTERM,
-        # so returncode is often nonzero too) shouldn't read as a failure.
+        # "crashed" means it exited on its own with a non-zero code, and
+        # nobody called stop() for this run. Two things it's deliberately
+        # not: a deliberate stop() (SIGTERM, so returncode is often
+        # nonzero too) shouldn't read as a failure; neither should a
+        # one-shot command that simply finished (exit code 0) before
+        # anyone got around to calling stop() on it.
         result = {}
         for name, proc in self._processes.items():
             if proc.running:
                 state = "running"
-            elif self._stopped_by_user.get(name, True):
+            elif self._stopped_by_user.get(name, True) or proc.returncode == 0:
                 state = "stopped"
             else:
                 state = "crashed"
             result[name] = {"state": state, "exit_code": proc.returncode}
         return result
 
-    async def start(self, name: str) -> None:
+    async def start(self, name: str, **overrides) -> None:
+        """`overrides` (e.g. frequency, from a static position that
+        launched this) fill in placeholders the same way a pass-mode
+        launch's downlink frequency does -- see app_profiles.py's
+        resolve_command()."""
         profiles = load_profiles()
         if name not in profiles:
             raise KeyError(name)
@@ -70,7 +77,15 @@ class StandaloneAppRunner:
         proc = self._process(name)
         if proc.running:
             raise RuntimeError(f"{name!r} is already running")
-        command = resolve_command(profiles[name]["command"])
+        try:
+            command = resolve_command(profiles[name]["command"], **overrides)
+        except KeyError as exc:
+            # `name` is already confirmed valid above -- a KeyError here is
+            # resolve_command()'s str.format() choking on an unresolved
+            # {placeholder}, not an unknown profile. Re-raise as ValueError
+            # so it doesn't get mistaken for one by this method's own
+            # callers (see api/orchestrator.py's standalone_start()).
+            raise ValueError(f"{name!r}'s command references {{{exc.args[0]}}}, which has no value here") from exc
         uses_sdr = profiles[name].get("uses_sdr", True)
         if uses_sdr:
             await self._arbiter.acquire()

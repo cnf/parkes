@@ -34,6 +34,7 @@ from parkes.sdr.arbiter import SdrArbiter
 from parkes.sdr.server import SoapyRemoteServer
 from parkes.standalone_apps import StandaloneAppRunner
 from parkes.tracking.fixed_targets import FixedTargetStore
+from parkes.tracking.gpsd_client import GpsdClient
 from parkes.tracking.groups import GroupStore
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
@@ -62,7 +63,15 @@ async def lifespan(app: FastAPI):
     tle_load_task = asyncio.create_task(_load_tles_in_background(app.state.tle_catalog))
     app.state.group_store = GroupStore()
     app.state.fixed_target_store = FixedTargetStore()
-    app.state.sky = SkyTracker(app.state.tle_catalog, app.state.group_store, app.state.fixed_target_store)
+    # Starts unconditionally and just quietly retries if nothing's
+    # listening -- same "not always connected" tolerance as the rest of
+    # this app's hardware integrations (rotctld, SDR). Only consulted when
+    # observer_location_mode is actually "gpsd" (see SkyTracker).
+    app.state.gpsd = GpsdClient(settings.gpsd_host, settings.gpsd_port)
+    app.state.gpsd.start()
+    app.state.sky = SkyTracker(
+        app.state.tle_catalog, app.state.group_store, app.state.fixed_target_store, app.state.gpsd
+    )
     app.state.tracking_scheduler = TrackingScheduler(app.state.sky, app.state.rotator)
     app.state.soapy_remote = SoapyRemoteServer()
     app.state.sdr_arbiter = SdrArbiter(app.state.soapy_remote)
@@ -79,6 +88,7 @@ async def lifespan(app: FastAPI):
     await app.state.orchestrator.stop()
     await app.state.standalone_apps.stop_timer()
     await app.state.rotator.close()
+    await app.state.gpsd.stop()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)

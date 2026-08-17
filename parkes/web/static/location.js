@@ -6,11 +6,13 @@
   const saveBtn = document.getElementById("location-save-btn");
   const modeDefaultRadio = document.getElementById("location-mode-default");
   const modeManualRadio = document.getElementById("location-mode-manual");
+  const modeGpsdRadio = document.getElementById("location-mode-gpsd");
   const defaultHint = document.getElementById("location-default-hint");
   const latInput = document.getElementById("location-manual-lat");
   const lonInput = document.getElementById("location-manual-lon");
   const elevInput = document.getElementById("location-manual-elev");
   const geocodeHint = document.getElementById("location-geocode-hint");
+  const gpsdHint = document.getElementById("location-gpsd-hint");
   const useBrowserBtn = document.getElementById("location-use-browser-btn");
   const statusEl = document.getElementById("location-status");
 
@@ -42,20 +44,32 @@
 
   function applyMode() {
     const manual = modeManualRadio.checked;
+    const gpsd = modeGpsdRadio.checked;
     for (const el of [latInput, lonInput, elevInput, useBrowserBtn]) {
       el.disabled = !manual;
     }
+    gpsdHint.style.display = gpsd ? "" : "none";
   }
 
   modeDefaultRadio.addEventListener("change", applyMode);
   modeManualRadio.addEventListener("change", applyMode);
+  modeGpsdRadio.addEventListener("change", applyMode);
+
+  function renderGpsdHint(gpsdStatus) {
+    if (!gpsdStatus.has_fresh_fix) {
+      gpsdHint.textContent = gpsdStatus.last_error
+        ? `No fix yet -- gpsd: ${gpsdStatus.last_error}`
+        : "No fix yet -- waiting for gpsd...";
+      return;
+    }
+    gpsdHint.textContent =
+      `Fix: ${gpsdStatus.lat.toFixed(5)}, ${gpsdStatus.lon.toFixed(5)}` +
+      (gpsdStatus.altitude_m != null ? `, ${gpsdStatus.altitude_m.toFixed(0)}m` : "");
+  }
 
   async function refreshButtonLabel() {
     const data = await apiFetch("/api/settings");
-    const p = data.preferences;
-    const usingManual = p.observer_location_mode === "manual";
-    const lat = usingManual ? p.observer_manual_lat : p.observer_lat;
-    const lon = usingManual ? p.observer_manual_lon : p.observer_lon;
+    const { lat, lon } = data.effective_location;
     locationBtn.textContent = `\u{1F4CD} ${lat.toFixed(2)}, ${lon.toFixed(2)}`;
     locationBtn.title = "";
     const label = await geocodeLabel(lat, lon);
@@ -79,6 +93,8 @@
     el.addEventListener("input", scheduleManualGeocode);
   }
 
+  let gpsdPollTimer;
+
   async function openModal() {
     setStatus("", false);
     const data = await apiFetch("/api/settings");
@@ -89,19 +105,29 @@
     geocodeLabel(p.observer_lat, p.observer_lon).then((label) => {
       if (label) defaultHint.textContent += ` — ${label}`;
     });
-    const usingManual = p.observer_location_mode === "manual";
-    modeDefaultRadio.checked = !usingManual;
-    modeManualRadio.checked = usingManual;
+    modeDefaultRadio.checked = p.observer_location_mode === "default";
+    modeManualRadio.checked = p.observer_location_mode === "manual";
+    modeGpsdRadio.checked = p.observer_location_mode === "gpsd";
     latInput.value = p.observer_manual_lat;
     lonInput.value = p.observer_manual_lon;
     elevInput.value = p.observer_manual_elevation_m;
+    renderGpsdHint(data.gpsd_status);
     applyMode();
     scheduleManualGeocode();
     overlay.style.display = "flex";
+    // Live-ish while the modal's open, mainly useful right after plugging
+    // a GPS module in and watching it acquire a fix -- not worth polling
+    // once the modal's closed.
+    clearInterval(gpsdPollTimer);
+    gpsdPollTimer = setInterval(async () => {
+      const fresh = await apiFetch("/api/settings");
+      renderGpsdHint(fresh.gpsd_status);
+    }, 3000);
   }
 
   function closeModal() {
     overlay.style.display = "none";
+    clearInterval(gpsdPollTimer);
   }
 
   locationBtn.addEventListener("click", openModal);
@@ -138,7 +164,7 @@
   });
 
   saveBtn.addEventListener("click", async () => {
-    const mode = modeManualRadio.checked ? "manual" : "default";
+    const mode = modeGpsdRadio.checked ? "gpsd" : modeManualRadio.checked ? "manual" : "default";
     const body = { observer_location_mode: mode };
     if (mode === "manual") {
       body.observer_manual_lat = Number(latInput.value);
@@ -157,6 +183,10 @@
     }
     closeModal();
     refreshButtonLabel();
+    // tracking.js's az/el table is otherwise only as fresh as its own
+    // polling interval -- without this, a location change looks like it
+    // did nothing until that next poll (or a page reload) happens to land.
+    window.dispatchEvent(new Event("parkes:location-changed"));
   });
 
   refreshButtonLabel();

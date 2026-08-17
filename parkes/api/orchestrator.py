@@ -6,11 +6,17 @@ from pydantic import BaseModel
 
 from parkes.orchestrator import PassOrchestrator, find_overlaps
 from parkes.preferences import preferences
+from parkes.rotator.rotctld_client import RotctldError
 from parkes.sdr.app_profiles import delete_profile, load_profiles, put_profile
 from parkes.sdr.command_modules import list_command_modules
 from parkes.sdr.satdump_pipelines import list_all_pipelines, list_live_pipelines
 from parkes.standalone_apps import StandaloneAppRunner
 from parkes.tracking.sky import SkyTracker
+from parkes.tracking.static_positions import (
+    delete_static_position,
+    load_static_positions,
+    put_static_position,
+)
 from parkes.tracking.tracked_objects import (
     delete_tracked_object,
     load_tracked_objects,
@@ -50,6 +56,24 @@ class UpsertProfileRequest(BaseModel):
     module_mode: str | None = None
     module_fields: dict | None = None
     module_extra_args: list[str] | None = None
+
+
+class UpsertStaticPositionRequest(BaseModel):
+    name: str
+    # "azel": az/el are the stored, authoritative values, entered directly.
+    # "latlon": lat/lon/alt_m are authoritative; az/el are derived from
+    # them (relative to the observer's current location) and recomputed
+    # fresh on every read/go, not trusted from what's stored -- see
+    # get_static_positions()/go_static_position(). Stored anyway as a
+    # last-known-good display value.
+    position_mode: Literal["azel", "latlon"] = "azel"
+    az: float | None = None
+    el: float | None = None
+    lat: float | None = None
+    lon: float | None = None
+    alt_m: float = 0.0
+    app: str | None = None
+    frequency: float | None = None
 
 
 def _orchestrator(request: Request) -> PassOrchestrator:
@@ -201,4 +225,88 @@ async def standalone_start(name: str, request: Request):
 @router.post("/standalone/{name}/stop")
 async def standalone_stop(name: str, request: Request):
     await _standalone(request).stop(name)
+    return {"status": "ok"}
+
+
+def _effective_azel(position: dict, sky: SkyTracker) -> tuple[float, float]:
+    """A latlon-mode position's az/el is derived from the observer's
+    *current* location, not trusted from whatever was last stored --
+    that's the whole point of keeping lat/lon/alt around (see
+    UpsertStaticPositionRequest's docstring comment)."""
+    if position.get("position_mode") == "latlon" and position.get("lat") is not None:
+        return sky.azel_of_point(position["lat"], position["lon"], position.get("alt_m") or 0.0)
+    return position["az"], position["el"]
+
+
+@router.get("/static_positions/compute_azel")
+def compute_static_position_azel(lat: float, lon: float, request: Request, alt_m: float = 0.0):
+    """Live az/el preview for the lat/lon/alt editor -- doesn't touch
+    stored data, just the same math put_static_position_route() uses."""
+    az, el = request.app.state.sky.azel_of_point(lat, lon, alt_m)
+    return {"az": az, "el": el}
+
+
+@router.get("/static_positions")
+def get_static_positions(request: Request):
+    positions = load_static_positions()
+    sky = request.app.state.sky
+    for position in positions.values():
+        position["az"], position["el"] = _effective_azel(position, sky)
+    return positions
+
+
+@router.put("/static_positions/{position_id}")
+def put_static_position_route(position_id: str, body: UpsertStaticPositionRequest, request: Request):
+    if body.position_mode == "latlon":
+        if body.lat is None or body.lon is None:
+            raise HTTPException(422, "lat/lon are required in latlon mode")
+        az, el = request.app.state.sky.azel_of_point(body.lat, body.lon, body.alt_m)
+    else:
+        if body.az is None or body.el is None:
+            raise HTTPException(422, "az/el are required in azel mode")
+        az, el = body.az, body.el
+    payload = body.model_dump()
+    payload["az"], payload["el"] = az, el
+    put_static_position(position_id, payload)
+    return {"status": "ok"}
+
+
+@router.delete("/static_positions/{position_id}")
+def delete_static_position_route(position_id: str):
+    delete_static_position(position_id)
+    return {"status": "ok"}
+
+
+@router.post("/static_positions/{position_id}/go")
+async def go_static_position(position_id: str, request: Request):
+    position = load_static_positions().get(position_id)
+    if position is None:
+        raise HTTPException(404, f"unknown static position: {position_id}")
+    az, el = _effective_azel(position, request.app.state.sky)
+    try:
+        await request.app.state.rotator.set_position(az, el)
+    except (RotctldError, ConnectionError, OSError) as exc:
+        raise HTTPException(502, str(exc)) from exc
+    app_id = position.get("app")
+    if app_id:
+        standalone = _standalone(request)
+        if not standalone.running(app_id):
+            overrides = {"frequency": position["frequency"]} if position.get("frequency") else {}
+            try:
+                await standalone.start(app_id, **overrides)
+            except KeyError as exc:
+                raise HTTPException(404, f"unknown app profile: {app_id}") from exc
+            except (ValueError, RuntimeError) as exc:
+                raise HTTPException(409, str(exc)) from exc
+    return {"status": "ok"}
+
+
+@router.post("/static_positions/{position_id}/stop")
+async def stop_static_position(position_id: str, request: Request):
+    position = load_static_positions().get(position_id)
+    if position is None:
+        raise HTTPException(404, f"unknown static position: {position_id}")
+    app_id = position.get("app")
+    if app_id:
+        await _standalone(request).stop(app_id)
     return {"status": "ok"}

@@ -10,12 +10,18 @@ class Settings(BaseSettings):
     rotctld_host: str = "localhost"
     rotctld_port: int = 4533
 
-    # Observer location, used for az/el tracking math. Manually configured
-    # for now (defaults to Antwerp, Belgium); gpsd / browser-geolocation
-    # sourcing can replace this later without changing callers.
+    # Observer location, used for az/el tracking math. Defaults to Antwerp,
+    # Belgium -- the fallback used when observer_location_mode isn't
+    # "manual"/"gpsd", and gpsd's fallback when it has no fix yet.
     observer_lat: float = 51.2194
     observer_lon: float = 4.4025
     observer_elevation_m: float = 10.0
+
+    # gpsd (or gpsfake, for testing -- same wire protocol) that
+    # observer_location_mode "gpsd" reads a live fix from. See
+    # tracking/gpsd_client.py.
+    gpsd_host: str = "localhost"
+    gpsd_port: int = 2947
 
     # Where skyfield caches its downloaded ephemeris/timescale data.
     skyfield_data_dir: str = "data/skyfield"
@@ -70,6 +76,10 @@ class Settings(BaseSettings):
     # from this app at all.
     orchestrator_min_elevation: float = 5.0
     app_profiles_file: str = "data/tracking/app_profiles.json"
+
+    # Named, fixed az/el positions -- manual-only "go here, optionally
+    # launch a standalone app" shortcuts. See tracking/static_positions.py.
+    static_positions_file: str = "data/tracking/static_positions.json"
 
 
 settings = Settings()

@@ -13,7 +13,7 @@ class UpdateSettingsRequest(BaseModel):
     observer_lat: float | None = None
     observer_lon: float | None = None
     observer_elevation_m: float | None = None
-    observer_location_mode: Literal["default", "manual"] | None = None
+    observer_location_mode: Literal["default", "manual", "gpsd"] | None = None
     observer_manual_lat: float | None = None
     observer_manual_lon: float | None = None
     observer_manual_elevation_m: float | None = None
@@ -28,7 +28,9 @@ class UpdateSettingsRequest(BaseModel):
 
 
 @router.get("")
-def get_settings():
+def get_settings(request: Request):
+    gpsd = request.app.state.gpsd
+    lat, lon, elevation, source = request.app.state.sky.current_location()
     return {
         "preferences": preferences.get_all(),
         "infra": {
@@ -37,6 +39,17 @@ def get_settings():
             "satdump_output_dir": settings.satdump_output_dir,
             "tle_data_dir": settings.tle_data_dir,
             "skyfield_data_dir": settings.skyfield_data_dir,
+        },
+        # What's actually in effect right now, regardless of mode -- lets
+        # the location modal show gpsd's live fix (or lack of one) without
+        # duplicating GpsdClient's staleness logic client-side.
+        "effective_location": {"lat": lat, "lon": lon, "elevation_m": elevation, "source": source},
+        "gpsd_status": {
+            "has_fresh_fix": gpsd.has_fresh_fix,
+            "lat": gpsd.lat,
+            "lon": gpsd.lon,
+            "altitude_m": gpsd.altitude_m,
+            "last_error": gpsd.last_error,
         },
     }
 

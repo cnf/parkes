@@ -44,6 +44,8 @@
       .tok-placeholder { color: var(--accent); font-weight: 600; }
       .module-advanced { margin-top: 1rem; }
       .module-advanced summary { cursor: pointer; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem; }
+      .position-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; margin-bottom: 0.8rem; }
+      .position-az-el { color: var(--text-muted); font-variant-numeric: tabular-nums; }
       .table-scroll { overflow-x: auto; }
       table td { vertical-align: middle; }
       table td.actions-col { white-space: nowrap; text-align: right; }
@@ -100,6 +102,32 @@
       </div>
 
       <div id="tracked-edit-view" style="display: none;"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Static Positions</h2>
+        <span id="positions-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+      <p class="hint">
+        Fixed az/el positions you point the dish at by hand -- never picked up by the Pass
+        Orchestrator's scheduling, only triggered here. Optionally launch a standalone app profile
+        alongside the move.
+      </p>
+
+      <div id="positions-list-view">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Az / El</th><th>App</th><th></th><th></th></tr>
+            </thead>
+            <tbody id="positions-table-body"></tbody>
+          </table>
+        </div>
+        <button id="add-position-btn" type="button" class="btn-sm" style="margin-top: 0.8rem;">+ Add position</button>
+      </div>
+
+      <div id="positions-edit-view" style="display: none;"></div>
     </section>
 
     <section class="card">
