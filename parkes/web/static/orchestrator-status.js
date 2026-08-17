@@ -9,7 +9,20 @@
       const data = await res.json();
       statusEl.textContent = data.running ? "running" : "stopped";
       dotEl.classList.toggle("on", data.running);
-      lineEl.textContent = data.current_target ? `tracking ${data.current_target} -- ${data.status}` : data.status;
+      if (data.current_target) {
+        // data.status already reads e.g. "tracking sat:X (continuous)" --
+        // build our own line from the structured fields instead of
+        // concatenating it with current_target again.
+        const label =
+          data.current_target_name && data.current_target_name !== data.current_target
+            ? `${data.current_target_name} (${data.current_target})`
+            : data.current_target;
+        const continuous = data.current_continuous ? " (continuous)" : "";
+        const profile = data.current_profile ? ` -- ${data.current_profile}` : "";
+        lineEl.textContent = `${label}${continuous}${profile}`;
+      } else {
+        lineEl.textContent = data.status;
+      }
     } catch {
       // dashboard poll -- a transient failure here isn't worth surfacing
     }

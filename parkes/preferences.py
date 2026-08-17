@@ -28,6 +28,10 @@ DEFAULTS: dict[str, Any] = {
     "orchestrator_min_elevation": settings.orchestrator_min_elevation,
     "soapy_remote_bind_host": settings.soapy_remote_bind_host,
     "soapy_remote_bind_port": settings.soapy_remote_bind_port,
+    # When on, SdrArbiter (see sdr/arbiter.py) runs SoapyRemote whenever no
+    # local "uses_sdr" app profile is active, stopping it right before one
+    # launches and restarting it once the last one finishes.
+    "soapy_remote_auto": False,
 }
 
 

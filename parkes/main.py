@@ -30,6 +30,7 @@ from parkes.api.tracking import router as tracking_router
 from parkes.config import settings
 from parkes.orchestrator import PassOrchestrator
 from parkes.rotator.rotctld_client import RotctldClient
+from parkes.sdr.arbiter import SdrArbiter
 from parkes.sdr.server import SoapyRemoteServer
 from parkes.standalone_apps import StandaloneAppRunner
 from parkes.tracking.fixed_targets import FixedTargetStore
@@ -64,9 +65,13 @@ async def lifespan(app: FastAPI):
     app.state.sky = SkyTracker(app.state.tle_catalog, app.state.group_store, app.state.fixed_target_store)
     app.state.tracking_scheduler = TrackingScheduler(app.state.sky, app.state.rotator)
     app.state.soapy_remote = SoapyRemoteServer()
-    app.state.orchestrator = PassOrchestrator(app.state.sky, app.state.tracking_scheduler)
-    app.state.standalone_apps = StandaloneAppRunner()
+    app.state.sdr_arbiter = SdrArbiter(app.state.soapy_remote)
+    app.state.orchestrator = PassOrchestrator(
+        app.state.sky, app.state.tracking_scheduler, app.state.sdr_arbiter
+    )
+    app.state.standalone_apps = StandaloneAppRunner(app.state.sdr_arbiter)
     app.state.standalone_apps.start_timer()
+    await app.state.sdr_arbiter.ensure_idle_state()
     yield
     tle_load_task.cancel()
     app.state.tracking_scheduler.stop()
@@ -120,6 +125,13 @@ def orchestrator_page(request: Request):
 def settings_page(request: Request):
     return templates.TemplateResponse(
         request, "settings.html", {"app_name": settings.app_name}
+    )
+
+
+@app.get("/sdr", response_class=HTMLResponse)
+def sdr_page(request: Request):
+    return templates.TemplateResponse(
+        request, "sdr.html", {"app_name": settings.app_name}
     )
 
 

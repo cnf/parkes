@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }} &middot; SDR</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <style>
+      .hint { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1rem; }
+      .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.8rem; }
+      .table-scroll { overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
+      <h1>{{ app_name }}</h1>
+      <nav class="nav-links">
+        <a href="/orchestrator" class="back-link">Orchestrator</a>
+        <a href="/settings" class="back-link">Settings</a>
+        <a href="/" class="back-link">&larr; Dashboard</a>
+      </nav>
+    </header>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>SDR Devices</h2>
+        <span id="devices-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+      <p class="hint">
+        Detected via SoapySDR. Label a device to tell a HackRF and an RTL-SDR apart -- pick one
+        below as the active <code>{source}</code>/<code>{source_id}</code> for app profiles. The
+        connect strings are what other SoapySDR-based software (gqrx, SDR++, GNU Radio) needs:
+        "Local" for software on this machine, "Network" for another machine once SDR Network
+        Sharing below is running.
+      </p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Label</th><th>Driver</th><th>ID</th><th>Local connect string</th><th>Network connect string</th></tr>
+          </thead>
+          <tbody id="devices-table-body"></tbody>
+        </table>
+      </div>
+      <button id="devices-rescan-btn" type="button" class="btn-sm" style="margin-top: 0.8rem;">Rescan</button>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>SDR Source</h2>
+        <span id="sdr-source-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+      <p class="hint">
+        The device and sample rate app profiles get via the <code>{source}</code>/
+        <code>{source_id}</code>/<code>{samplerate}</code> command placeholders.
+      </p>
+      <form id="sdr-source-form">
+        <div class="settings-grid" style="margin-bottom: 0.6rem;">
+          <label>Detected device
+            <select id="sdr-source-picker"><option value="">-- pick a detected device --</option></select>
+          </label>
+        </div>
+        <div class="settings-grid" style="margin-bottom: 0.8rem;">
+          <label>SDR source <input name="satdump_sdr_source" type="text" placeholder="hackrf" /></label>
+          <label>SDR source id <input name="satdump_sdr_source_id" type="text" placeholder="optional" /></label>
+          <label>Sample rate (Hz) <input name="satdump_samplerate" type="number" step="1" /></label>
+        </div>
+        <button type="submit" class="primary">Save</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>SDR Network Sharing</h2>
+        <span class="status-pill"><span class="status-dot" id="sdr-dot"></span><span id="sdr-status"></span></span>
+      </div>
+      <p class="hint">
+        Exposes the local SDR over the network via SoapyRemote, so gpredict/gqrx/a laptop-side
+        satdump can use it directly. Mutually exclusive with local app profiles that need the SDR
+        -- only one can hold the physical device at a time.
+      </p>
+      <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; margin-bottom: 0.8rem;">
+        <input id="sdr-auto-toggle" type="checkbox" style="width: auto; accent-color: var(--accent);" />
+        Auto-manage -- release for a local app profile that needs the SDR, resume once it's free
+      </label>
+      <div class="settings-grid" style="margin-bottom: 0.8rem;">
+        <label>Bind host <input id="sdr-bind-host" type="text" placeholder="0.0.0.0" /></label>
+        <label>Bind port <input id="sdr-bind-port" type="number" step="1" placeholder="55132" /></label>
+      </div>
+      <div class="row" id="sdr-manual-controls">
+        <button id="sdr-start-btn" class="primary">Start</button>
+        <button id="sdr-stop-btn" disabled>Stop</button>
+      </div>
+      <p class="hint" id="sdr-error" style="color: var(--danger);"></p>
+    </section>
+
+    <script src="/static/sdr.js"></script>
+  </body>
+</html>

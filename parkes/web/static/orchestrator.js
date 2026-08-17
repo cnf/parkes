@@ -115,43 +115,45 @@
     }
   }
 
-  function assignProfileIds() {
+  function assignProfileId(profile) {
+    if (profile.id) return profile.id;
     const taken = new Set(profiles.filter((p) => p.id).map((p) => p.id));
-    for (const profile of profiles) {
-      if (!profile.id) {
-        profile.id = uniqueId(slugify(profile.name), taken);
-        taken.add(profile.id);
-      }
-    }
+    profile.id = uniqueId(slugify(profile.name), taken);
+    return profile.id;
   }
 
-  async function saveProfiles() {
-    assignProfileIds();
-    const payload = {};
-    for (const profile of profiles) {
-      payload[profile.id] = {
-        name: profile.name.trim(),
-        command: profile.command,
-        mode: profile.mode,
-        ...(profile.mode === "standalone" && profile.scheduleMinutes
-          ? { schedule_seconds: profile.scheduleMinutes * 60 }
-          : {}),
-      };
-    }
-    await apiFetch("/api/orchestrator/app_profiles", {
+  // PUTs/DELETEs by id, one profile at a time -- never the whole
+  // collection, so a bug in this flow can only ever touch the profile
+  // being edited, not every other one too.
+  async function saveProfile(profile) {
+    assignProfileId(profile);
+    const payload = {
+      name: profile.name.trim(),
+      command: profile.command,
+      mode: profile.mode,
+      uses_sdr: profile.usesSdr,
+      ...(profile.mode === "standalone" && profile.scheduleMinutes
+        ? { schedule_seconds: profile.scheduleMinutes * 60 }
+        : {}),
+    };
+    await apiFetch(`/api/orchestrator/app_profiles/${encodeURIComponent(profile.id)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     flashStatus(profilesStatus, "saved", false);
-    // Names/modes may have changed; leave an in-progress satellite edit
+    // Name/mode may have changed; leave an in-progress satellite edit
     // alone rather than yanking the view out from under it.
     if (trackedEditIndex === null) renderTrackedList();
   }
 
-  function validateProfiles() {
-    if (profiles.some((p) => !p.name.trim())) return "every profile needs a name";
-    if (profiles.some((p) => p.command.length === 0)) return "every profile needs at least one command arg";
+  async function deleteProfile(id) {
+    await apiFetch(`/api/orchestrator/app_profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  function validateProfile(profile) {
+    if (!profile.name.trim()) return "every profile needs a name";
+    if (profile.command.length === 0) return "every profile needs at least one command arg";
     return null;
   }
 
@@ -291,6 +293,23 @@
     }
     profilesEditView.appendChild(modeRow);
 
+    const usesSdrLabel = document.createElement("label");
+    usesSdrLabel.style.cssText = "display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: normal; margin-bottom: 0.8rem;";
+    const usesSdrCheckbox = document.createElement("input");
+    usesSdrCheckbox.type = "checkbox";
+    usesSdrCheckbox.style.cssText = "width: auto; accent-color: var(--accent);";
+    usesSdrCheckbox.checked = profile.usesSdr;
+    usesSdrCheckbox.addEventListener("change", () => {
+      profile.usesSdr = usesSdrCheckbox.checked;
+    });
+    usesSdrLabel.append(
+      usesSdrCheckbox,
+      document.createTextNode(
+        "Uses the SDR -- claims it while running, so auto-managed SDR Network Sharing releases for it"
+      )
+    );
+    profilesEditView.appendChild(usesSdrLabel);
+
     const chipList = document.createElement("div");
     chipList.className = "chip-list";
     profile.command.forEach((arg, argIndex) => {
@@ -350,13 +369,13 @@
     saveBtn.className = "primary";
     saveBtn.textContent = "Save";
     saveBtn.addEventListener("click", async () => {
-      const error = validateProfiles();
+      const error = validateProfile(profile);
       if (error) {
         flashStatus(profilesStatus, error, true);
         return;
       }
       try {
-        await saveProfiles();
+        await saveProfile(profile);
       } catch (err) {
         flashStatus(profilesStatus, `error: ${err.message}`, true);
         return;
@@ -376,13 +395,15 @@
     deleteBtn.className = "btn-sm";
     deleteBtn.textContent = "Delete this profile";
     deleteBtn.addEventListener("click", async () => {
-      profiles.splice(profilesEditIndex, 1);
       try {
-        await saveProfiles();
+        // A never-saved "+ New profile" has no id yet -- nothing to
+        // delete server-side, just drop it locally.
+        if (profile.id) await deleteProfile(profile.id);
       } catch (err) {
         flashStatus(profilesStatus, `error: ${err.message}`, true);
         return;
       }
+      profiles.splice(profilesEditIndex, 1);
       profilesEditIndex = null;
       profilesEditSnapshot = null;
       renderProfilesList();
@@ -392,7 +413,7 @@
   }
 
   addProfileBtn.addEventListener("click", () => {
-    profiles.push({ id: null, name: "", command: [], mode: "pass", scheduleMinutes: null });
+    profiles.push({ id: null, name: "", command: [], mode: "pass", usesSdr: true, scheduleMinutes: null });
     enterProfileEdit(profiles.length - 1);
   });
 
@@ -403,6 +424,7 @@
       name: profile.name || id,
       command: [...(profile.command || [])],
       mode: profile.mode === "standalone" ? "standalone" : "pass",
+      usesSdr: profile.uses_sdr !== false,
       scheduleMinutes: profile.schedule_seconds ? Math.round(profile.schedule_seconds / 60) : null,
     }));
   }
@@ -437,22 +459,43 @@
     return `${obj.downlinks.length} downlinks`;
   }
 
-  async function saveTrackedObjects() {
-    const payload = trackedObjects.map((obj) => ({
-      norad: obj.norad,
+  // PUTs/DELETEs by norad, one satellite at a time -- never the whole
+  // list, so a bug in this flow can only ever touch the satellite being
+  // edited, not every other one too.
+  async function saveTrackedObject(obj) {
+    const payload = {
       name: obj.name,
       enabled: obj.enabled,
       downlinks: obj.downlinks.map((downlink) => ({
         frequency: downlink.frequency,
         app: downlink.app,
       })),
-    }));
-    await apiFetch("/api/orchestrator/objects", {
+    };
+    await apiFetch(`/api/orchestrator/objects/${obj.norad}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     flashStatus(trackedStatus, "saved", false);
+  }
+
+  async function deleteTrackedObject(norad) {
+    await apiFetch(`/api/orchestrator/objects/${norad}`, { method: "DELETE" });
+  }
+
+  async function moveTrackedObject(norad, direction) {
+    try {
+      await apiFetch(`/api/orchestrator/objects/${norad}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction }),
+      });
+    } catch (err) {
+      flashStatus(trackedStatus, `error: ${err.message}`, true);
+      return;
+    }
+    await loadObjects();
+    renderTrackedList();
   }
 
   function renderTrackedList() {
@@ -462,7 +505,7 @@
     trackedTableBody.innerHTML = "";
 
     if (trackedObjects.length === 0) {
-      trackedTableBody.innerHTML = `<tr><td colspan="4" class="hint">No satellites tracked yet -- search below to add one.</td></tr>`;
+      trackedTableBody.innerHTML = `<tr><td colspan="5" class="hint">No satellites tracked yet -- search below to add one.</td></tr>`;
       return;
     }
 
@@ -476,7 +519,7 @@
       cb.addEventListener("change", async () => {
         obj.enabled = cb.checked;
         try {
-          await saveTrackedObjects();
+          await saveTrackedObject(obj);
         } catch (err) {
           flashStatus(trackedStatus, `error: ${err.message}`, true);
         }
@@ -489,6 +532,24 @@
       const downlinkTd = document.createElement("td");
       downlinkTd.textContent = downlinkSummary(obj);
 
+      const priorityTd = document.createElement("td");
+      priorityTd.style.whiteSpace = "nowrap";
+      const upBtn = document.createElement("button");
+      upBtn.type = "button";
+      upBtn.className = "btn-sm";
+      upBtn.textContent = "↑";
+      upBtn.title = "Higher priority";
+      upBtn.disabled = index === 0;
+      upBtn.addEventListener("click", () => moveTrackedObject(obj.norad, "up"));
+      const downBtn = document.createElement("button");
+      downBtn.type = "button";
+      downBtn.className = "btn-sm";
+      downBtn.textContent = "↓";
+      downBtn.title = "Lower priority";
+      downBtn.disabled = index === trackedObjects.length - 1;
+      downBtn.addEventListener("click", () => moveTrackedObject(obj.norad, "down"));
+      priorityTd.append(upBtn, downBtn);
+
       const editTd = document.createElement("td");
       editTd.className = "actions-col";
       const editBtn = document.createElement("button");
@@ -498,7 +559,7 @@
       editBtn.addEventListener("click", () => enterTrackedEdit(index));
       editTd.appendChild(editBtn);
 
-      row.append(cbTd, nameTd, downlinkTd, editTd);
+      row.append(cbTd, nameTd, downlinkTd, priorityTd, editTd);
       trackedTableBody.appendChild(row);
     });
   }
@@ -618,7 +679,7 @@
     saveBtn.textContent = "Save";
     saveBtn.addEventListener("click", async () => {
       try {
-        await saveTrackedObjects();
+        await saveTrackedObject(obj);
       } catch (err) {
         flashStatus(trackedStatus, `error: ${err.message}`, true);
         return;
@@ -638,13 +699,13 @@
     deleteBtn.className = "btn-sm";
     deleteBtn.textContent = "Delete this satellite";
     deleteBtn.addEventListener("click", async () => {
-      trackedObjects.splice(trackedEditIndex, 1);
       try {
-        await saveTrackedObjects();
+        await deleteTrackedObject(obj.norad);
       } catch (err) {
         flashStatus(trackedStatus, `error: ${err.message}`, true);
         return;
       }
+      trackedObjects.splice(trackedEditIndex, 1);
       trackedEditIndex = null;
       trackedEditSnapshot = null;
       renderTrackedList();
@@ -729,9 +790,61 @@
   });
 
   // ---------------------------------------------------------------------
+  // Pass Overlaps -- a read-only forecast, doesn't feed back into
+  // scheduling. Refreshed on load and by hand (passes shift as TLEs
+  // refresh/time passes, not worth polling continuously for).
+  // ---------------------------------------------------------------------
+
+  const overlapsList = document.getElementById("overlaps-list");
+  const overlapsRefreshBtn = document.getElementById("overlaps-refresh-btn");
+  const overlapsStatus = document.getElementById("overlaps-status");
+
+  function formatRelative(iso) {
+    const mins = Math.round((new Date(iso) - Date.now()) / 60000);
+    if (mins <= 0) return "now";
+    if (mins < 60) return `${mins}m`;
+    return `${(mins / 60).toFixed(1)}h`;
+  }
+
+  async function loadOverlaps() {
+    overlapsList.textContent = "checking...";
+    let overlaps;
+    try {
+      overlaps = await apiFetch("/api/orchestrator/overlaps");
+    } catch (err) {
+      overlapsList.textContent = `error: ${err.message}`;
+      return;
+    }
+    if (overlaps.length === 0) {
+      overlapsList.textContent = "no overlaps in the next 48 hours";
+      return;
+    }
+    overlapsList.innerHTML = "";
+    for (const o of overlaps) {
+      const overlapMins = Math.max(
+        1,
+        Math.round((new Date(o.overlap_end) - new Date(o.overlap_start)) / 60000)
+      );
+      const row = document.createElement("div");
+      row.style.marginBottom = "0.4rem";
+      row.innerHTML = `<strong>${escapeHtml(o.a.name)}</strong> vs <strong>${escapeHtml(o.b.name)}</strong> -- overlap in ${formatRelative(o.overlap_start)}, lasts ~${overlapMins}m`;
+      overlapsList.appendChild(row);
+    }
+  }
+
+  overlapsRefreshBtn.addEventListener("click", async () => {
+    try {
+      await loadOverlaps();
+      flashStatus(overlapsStatus, "refreshed", false);
+    } catch (err) {
+      flashStatus(overlapsStatus, `error: ${err.message}`, true);
+    }
+  });
+
+  // ---------------------------------------------------------------------
 
   async function init() {
-    await Promise.all([loadProfiles(), loadObjects()]);
+    await Promise.all([loadProfiles(), loadObjects(), loadOverlaps()]);
     renderProfilesList();
     renderTrackedList();
     await refreshStandaloneStatus();

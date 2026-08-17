@@ -8,7 +8,6 @@
     "observer_lon",
     "observer_elevation_m",
     "tracking_interval_seconds",
-    "satdump_samplerate",
     "orchestrator_min_elevation",
   ]);
 
@@ -51,7 +50,7 @@
         if (raw.trim() === "") continue; // don't coerce a blank field to 0
         values[key] = Number(raw);
       } else {
-        values[key] = raw; // allow "" for optional text fields like source id
+        values[key] = raw;
       }
     }
     try {

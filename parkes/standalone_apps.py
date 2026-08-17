@@ -4,6 +4,7 @@ import time
 
 from parkes.process import ManagedProcess
 from parkes.sdr.app_profiles import load_profiles, resolve_command
+from parkes.sdr.arbiter import SdrArbiter
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,16 @@ class StandaloneAppRunner:
     A profile with "schedule_seconds" set is auto-(re)started on that
     interval whenever it isn't already running; everything else is purely
     manual via start()/stop().
+
+    A profile with "uses_sdr" true (the default) acquires/releases
+    `arbiter` around its run, same as the Pass Orchestrator's pass-mode
+    profiles -- see SdrArbiter for what that does.
     """
 
-    def __init__(self):
+    def __init__(self, arbiter: SdrArbiter):
+        self._arbiter = arbiter
         self._processes: dict[str, ManagedProcess] = {}
+        self._uses_sdr: dict[str, bool] = {}
         self._last_started: dict[str, float] = {}
         self._timer_task: asyncio.Task | None = None
 
@@ -51,18 +58,38 @@ class StandaloneAppRunner:
         if proc.running:
             raise RuntimeError(f"{name!r} is already running")
         command = resolve_command(profiles[name]["command"])
+        uses_sdr = profiles[name].get("uses_sdr", True)
+        if uses_sdr:
+            await self._arbiter.acquire()
         try:
             await proc.start(*command)
         except OSError as exc:
             # A bad command (typo'd path, missing binary...) should surface
             # as a clean error to start()'s caller, not an opaque 500 from
             # the API layer or an unhandled exception in the timer loop.
+            if uses_sdr:
+                await self._arbiter.release()
             raise RuntimeError(f"failed to launch {name!r}: {exc}") from exc
+        self._uses_sdr[name] = uses_sdr
         self._last_started[name] = time.monotonic()
+        if uses_sdr:
+            # A one-shot profile's process can exit on its own, with
+            # nobody ever calling stop() -- watch for that so the arbiter
+            # still gets released instead of leaking the claim forever.
+            # Racing with an explicit stop() below is fine: whichever
+            # reaches the dict.pop() first releases, the other is a no-op.
+            asyncio.create_task(self._release_when_done(name, proc))
+
+    async def _release_when_done(self, name: str, proc: ManagedProcess) -> None:
+        await proc.wait()
+        if self._uses_sdr.pop(name, False):
+            await self._arbiter.release()
 
     async def stop(self, name: str) -> None:
         if name in self._processes:
             await self._processes[name].stop()
+        if self._uses_sdr.pop(name, False):
+            await self._arbiter.release()
 
     def start_timer(self) -> None:
         if self._timer_task is None:
@@ -76,8 +103,8 @@ class StandaloneAppRunner:
             except asyncio.CancelledError:
                 pass
             self._timer_task = None
-        for proc in self._processes.values():
-            await proc.stop()
+        for name in list(self._processes):
+            await self.stop(name)
 
     async def _run_timer(self) -> None:
         while True:

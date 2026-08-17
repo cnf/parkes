@@ -9,6 +9,10 @@
       .instrument-readout { display: flex; justify-content: space-evenly; font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-bottom: 0.8rem; }
       .instrument-readout .unit { font-weight: normal; color: var(--text-muted); }
 
+      #targets-body tr.tracking-current { background: rgba(255, 103, 0, 0.1); box-shadow: inset 3px 0 var(--accent); }
+      #targets-body tr.tracking-current td:first-child { font-weight: 600; }
+      #targets-body tr.tracking-next { background: rgba(0, 145, 234, 0.08); box-shadow: inset 3px 0 var(--accent2); }
+
       .instrument-dish { display: block; width: 100%; height: auto; }
       .elevation-dish { stroke: var(--accent2); stroke-width: 6; fill: none; stroke-linecap: round; }
       .elevation-boresight { stroke: var(--accent2); stroke-width: 3; stroke-linecap: round; }
@@ -64,6 +68,7 @@
       <nav class="nav-links">
         <button id="location-btn" class="back-link" type="button">&#128205; Location</button>
         <a href="/orchestrator" class="back-link">Pass Orchestrator</a>
+        <a href="/sdr" class="back-link">SDR</a>
         <a href="/settings" class="back-link">Settings</a>
       </nav>
     </header>

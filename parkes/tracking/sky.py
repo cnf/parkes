@@ -134,6 +134,14 @@ class SkyTracker:
         targets.sort(key=lambda t: t["el"], reverse=True)
         return targets
 
+    def _find_satellite(self, target_id: str):
+        if not target_id.startswith("sat:"):
+            raise ValueError(f"expected a satellite target, got {target_id!r}")
+        satellite = self._tle_catalog.get(int(target_id[4:]))
+        if satellite is None:
+            raise KeyError(target_id)
+        return satellite
+
     def next_pass(
         self, target_id: str, min_elevation: float = 0.0, search_hours: float = 48.0
     ) -> dict | None:
@@ -142,16 +150,27 @@ class SkyTracker:
         catalog sources don't have discrete "passes" the way an orbiting
         target handed off to a decode pipeline does.
 
-        Returns None if no full rise-to-set pass is found in the window
-        (e.g. a currently mid-pass target, since a partial pass at the
-        start of the search window is deliberately not counted).
-        """
-        if not target_id.startswith("sat:"):
-            raise ValueError(f"next_pass only supports satellite targets, got {target_id!r}")
-        satellite = self._tle_catalog.get(int(target_id[4:]))
-        if satellite is None:
-            raise KeyError(target_id)
+        If the target is already above min_elevation right now with no
+        rise event inside the window -- e.g. it's mid-pass, or (for
+        certain high-inclination orbits) continuously visible from here --
+        "aos" is "now" and "synthesized" is True instead of returning None.
 
+        "synthesized" alone doesn't distinguish "ordinary pass that just
+        happens to have already started" (still has a real, bounded "los")
+        from "genuinely never sets in the search window" -- a satellite
+        mid-pass with a real set event coming up is still a real, bounded
+        pass, just observed slightly late. "unbounded" is only true for
+        the latter (no set event found anywhere in the window, "los" falls
+        back to the window's edge) -- that's what the Pass Orchestrator
+        treats as lower priority than anything with a genuine end, since
+        "synthesized" alone would also match its own already-launched
+        pass on every re-check after the moment it started (see
+        orchestrator.py's _rank()).
+
+        Returns None only if the target isn't reachable at all in the
+        window (never rises above min_elevation).
+        """
+        satellite = self._find_satellite(target_id)
         topos = self._current_topos()
         t0 = self._timescale.now()
         t1 = t0 + timedelta(hours=search_hours)
@@ -166,7 +185,55 @@ class SkyTracker:
                     "los": set_time.utc_iso(),
                     "max_elevation": float(el.degrees),
                 }
+
+        current_el, _az, _dist = (satellite - topos).at(t0).altaz()
+        if current_el.degrees >= min_elevation:
+            set_time = None
+            max_elevation = current_el.degrees
+            for time, event in zip(times, events):
+                if event == 1:
+                    el, _az, _dist = (satellite - topos).at(time).altaz()
+                    max_elevation = max(max_elevation, float(el.degrees))
+                elif event == 2:
+                    set_time = time
+                    break
+            return {
+                "aos": t0.utc_iso(),
+                "los": (set_time or t1).utc_iso(),
+                "max_elevation": max_elevation,
+                "synthesized": True,
+                "unbounded": set_time is None,
+            }
         return None
+
+    def passes_in_window(
+        self, target_id: str, min_elevation: float = 0.0, search_hours: float = 48.0
+    ) -> list[dict]:
+        """Every complete rise-to-set pass in the window, not just the
+        first -- unlike next_pass(), doesn't stop early and doesn't
+        synthesize a currently-in-progress/continuous entry (a pass
+        without a real end wouldn't mean much in an overlap listing).
+        Used for overlap prediction, not scheduling.
+        """
+        satellite = self._find_satellite(target_id)
+        topos = self._current_topos()
+        t0 = self._timescale.now()
+        t1 = t0 + timedelta(hours=search_hours)
+        times, events = satellite.find_events(topos, t0, t1, altitude_degrees=min_elevation)
+
+        passes = []
+        for i in range(len(events) - 2):
+            if events[i] == 0 and events[i + 1] == 1 and events[i + 2] == 2:
+                rise_time, culminate_time, set_time = times[i], times[i + 1], times[i + 2]
+                el, _az, _dist = (satellite - topos).at(culminate_time).altaz()
+                passes.append(
+                    {
+                        "aos": rise_time.utc_iso(),
+                        "los": set_time.utc_iso(),
+                        "max_elevation": float(el.degrees),
+                    }
+                )
+        return passes
 
     def upcoming_passes(self, min_elevation: float = 0.0) -> list[dict]:
         """next_pass() for every enabled satellite, soonest first, skipping

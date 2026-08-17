@@ -33,6 +33,7 @@
       <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
       <h1>{{ app_name }}</h1>
       <nav class="nav-links">
+        <a href="/sdr" class="back-link">SDR</a>
         <a href="/settings" class="back-link">Settings</a>
         <a href="/" class="back-link">&larr; Dashboard</a>
       </nav>
@@ -63,14 +64,16 @@
       </div>
       <p class="hint">
         Satellites the Pass Orchestrator watches. Disable an entry to keep its downlink config
-        without deleting it. A downlink's app must be a "pass"-mode profile below.
+        without deleting it. A downlink's app must be a "pass"-mode profile below. List order is
+        priority: when two passes overlap, or one is continuously visible, the orchestrator
+        prefers whichever is higher in this list.
       </p>
 
       <div id="tracked-list-view">
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th></th><th>Satellite</th><th>Downlinks</th><th></th></tr>
+              <tr><th></th><th>Satellite</th><th>Downlinks</th><th>Priority</th><th></th></tr>
             </thead>
             <tbody id="tracked-table-body"></tbody>
           </table>
@@ -82,6 +85,20 @@
       </div>
 
       <div id="tracked-edit-view" style="display: none;"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Pass Overlaps</h2>
+        <span id="overlaps-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+      <p class="hint">
+        Where two tracked satellites' passes would overlap in the next 48 hours. The orchestrator
+        can only track one at a time -- see the priority order above for how it'd decide between
+        them.
+      </p>
+      <div id="overlaps-list" class="hint"></div>
+      <button id="overlaps-refresh-btn" type="button" class="btn-sm" style="margin-top: 0.8rem;">Refresh</button>
     </section>
 
     <section class="card">

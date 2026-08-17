@@ -37,6 +37,14 @@ class ManagedProcess:
             line = _ANSI_RE.sub("", raw_line.decode(errors="replace")).rstrip()
             self.log_lines.append(line)
 
+    async def wait(self) -> None:
+        """Waits for the current run to end, however it ends -- naturally
+        or via stop(). No-op if nothing has been started yet, or the last
+        run already finished.
+        """
+        if self._reader_task is not None:
+            await self._reader_task
+
     async def stop(self) -> None:
         if self._process is None:
             return

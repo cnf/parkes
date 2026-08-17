@@ -24,10 +24,17 @@ from parkes.preferences import preferences
 #                    hand, or automatically every schedule_seconds if set
 #                    (skipped if already running). Parkes never touches
 #                    the rotator for these.
+#
+# uses_sdr (default true if absent): whether this profile claims the
+# physical SDR while running. SdrArbiter (sdr/arbiter.py) uses it to decide
+# what to acquire/release when "soapy_remote_auto" is on -- set false for a
+# profile that doesn't touch the SDR (e.g. post-processing already-
+# downloaded files), so it never releases/reclaims SoapyRemote sharing.
 DEFAULT_PROFILES = {
     "noaa_apt": {
         "name": "noaa_apt",
         "mode": "pass",
+        "uses_sdr": True,
         "command": [
             "satdump",
             "live",
@@ -56,6 +63,21 @@ def save_profiles(profiles: dict) -> None:
     path = Path(settings.app_profiles_file)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(profiles, indent=2))
+
+
+def put_profile(profile_id: str, profile: dict) -> None:
+    """Creates or replaces a single profile -- read-modify-write against
+    the current file, so a caller only ever touches the one id it names,
+    never the whole collection (see api/orchestrator.py)."""
+    profiles = load_profiles()
+    profiles[profile_id] = profile
+    save_profiles(profiles)
+
+
+def delete_profile(profile_id: str) -> None:
+    profiles = load_profiles()
+    if profiles.pop(profile_id, None) is not None:
+        save_profiles(profiles)
 
 
 def resolve_command(command: list[str], **overrides) -> list[str]:

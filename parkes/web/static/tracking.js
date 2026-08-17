@@ -22,19 +22,54 @@
   }
 
   let passesById = new Map();
+  let activeTarget = null;
 
   async function refreshPasses() {
     const res = await fetch("/api/tracking/passes");
     const passes = await res.json();
+    // Pre-sorted soonest-AOS-first by the API -- the Map's first entry is
+    // "up next" across every target, not just satellites.
     passesById = new Map(passes.map((p) => [p.id, p]));
+  }
+
+  // Highlights the currently-tracked row (TrackingScheduler.active_target
+  // -- shared with the Pass Orchestrator, so this reflects its passes too,
+  // not just manual tracking) and the soonest upcoming one. Cheap enough
+  // to run on every status/targets refresh rather than only rebuilding
+  // rows, so tracking starting/stopping shows up within one status poll
+  // instead of waiting for the next full targets rebuild.
+  //
+  // TrackingScheduler.active_target is a display name (e.g. "NOAA 19"),
+  // not the "sat:NNNNN" id used everywhere else -- it's resolved once via
+  // SkyTracker.display_name() at start() and never converted back, so the
+  // "current" comparison has to match on name, not id.
+  function upNextId() {
+    // The first entry overall is soonest by "aos", but that can be a
+    // "synthesized" pass -- something already above the horizon, not
+    // actually about to rise. "Up next" should mean the soonest genuine
+    // future rise, so skip those.
+    for (const pass of passesById.values()) {
+      if (!pass.synthesized) return pass.id;
+    }
+    return null;
+  }
+
+  function applyHighlights() {
+    const nextId = upNextId();
+    for (const row of targetsBody.querySelectorAll("tr[data-target-id]")) {
+      const id = row.dataset.targetId;
+      row.classList.toggle("tracking-current", row.dataset.targetName === activeTarget);
+      row.classList.toggle("tracking-next", row.dataset.targetName !== activeTarget && id === nextId);
+    }
   }
 
   function formatPass(target) {
     const pass = passesById.get(target.id);
     if (!pass) return "";
+    if (pass.unbounded) return "Always visible";
     const minsUntil = Math.round((new Date(pass.aos) - Date.now()) / 60000);
-    const when =
-      minsUntil <= 0 ? "now" : minsUntil < 60 ? `${minsUntil}m` : `${(minsUntil / 60).toFixed(1)}h`;
+    if (minsUntil <= 0) return ""; // already mid-pass -- no meaningful "AOS in..." to show
+    const when = minsUntil < 60 ? `${minsUntil}m` : `${(minsUntil / 60).toFixed(1)}h`;
     return `AOS in ${when} (max ${pass.max_elevation.toFixed(0)}&deg;)`;
   }
 
@@ -47,6 +82,8 @@
     stopTrackingBtn.disabled = !status.active_target;
     trackingDot.classList.toggle("on", !!status.active_target && !status.last_error);
     trackingDot.classList.toggle("error", !!status.last_error);
+    activeTarget = status.active_target || null;
+    applyHighlights();
   }
 
   async function refreshTargets() {
@@ -55,6 +92,8 @@
     targetsBody.innerHTML = "";
     for (const target of targets) {
       const row = document.createElement("tr");
+      row.dataset.targetId = target.id;
+      row.dataset.targetName = target.name;
       const icon = target.kind === "satellite" ? "&#128752; " : "";
       row.innerHTML = `
         <td>${icon}${escapeHtml(target.name)}</td>
@@ -72,6 +111,7 @@
         refreshStatus();
       });
     }
+    applyHighlights();
   }
 
   document.getElementById("stop-tracking-btn").addEventListener("click", async () => {

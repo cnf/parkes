@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from parkes.config import settings
@@ -24,6 +24,7 @@ class UpdateSettingsRequest(BaseModel):
     orchestrator_min_elevation: float | None = None
     soapy_remote_bind_host: str | None = None
     soapy_remote_bind_port: int | None = None
+    soapy_remote_auto: bool | None = None
 
 
 @router.get("")
@@ -41,5 +42,11 @@ def get_settings():
 
 
 @router.put("")
-def update_settings(body: UpdateSettingsRequest):
-    return preferences.update(body.model_dump(exclude_unset=True))
+async def update_settings(body: UpdateSettingsRequest, request: Request):
+    updated = preferences.update(body.model_dump(exclude_unset=True))
+    if body.soapy_remote_auto is not None:
+        # Toggling this on should take effect right away if the SDR is
+        # currently idle, not wait for the next acquire()/release() cycle.
+        # A no-op if it was turned off, or if something already has it.
+        await request.app.state.sdr_arbiter.ensure_idle_state()
+    return updated

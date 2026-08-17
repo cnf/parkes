@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     satdump_output_dir: str = "data/satdump/output"
     tracked_objects_file: str = "data/tracking/tracked_objects.json"
 
+    # User-assigned labels for SoapySDR-detected devices (see sdr/devices.py),
+    # keyed by a stable id derived from driver+serial -- lets a HackRF and an
+    # RTL-SDR be told apart in the UI instead of just raw driver strings.
+    sdr_devices_file: str = "data/tracking/sdr_devices.json"
+
     # SoapyRemote: exposes whatever SDR SoapySDR's configured driver finds
     # (see satdump_sdr_source) over the network, so a laptop can run
     # gpredict/gqrx/satdump directly against it instead of through this
