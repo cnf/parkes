@@ -8,6 +8,7 @@
     hamlib_4
     soapysdr-with-plugins
     hackrf
+    gpsd
   ];
 
   languages.python = {
@@ -23,6 +24,8 @@
   };
 
   processes.web.exec = "uvicorn parkes.main:app --host 0.0.0.0 --port 8000";
+
+  processes.gpsfake.exec = "gpsfake ./data/gpsfake.nmea";
 
   # rotctld is the only thing that speaks serial EasyCommII to the hardware.
   # Defaults to Hamlib's dummy rotator so the app/UI can be built without
