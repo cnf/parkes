@@ -1,10 +1,8 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ app_name }} &middot; Pass Orchestrator</title>
-    <link rel="stylesheet" href="/static/style.css" />
+{% extends "base.html" %}
+
+{% block title_suffix %} &middot; Pass Orchestrator{% endblock %}
+
+{% block styles %}
     <style>
       .downlink-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
       .downlink-row input[type="number"] { width: 10rem; }
@@ -27,18 +25,15 @@
       table td.actions-col { white-space: nowrap; text-align: right; }
       table input[type="checkbox"] { width: auto; accent-color: var(--accent); }
     </style>
-  </head>
-  <body>
-    <header>
-      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
-      <h1>{{ app_name }}</h1>
-      <nav class="nav-links">
+{% endblock %}
+
+{% block nav %}
         <a href="/sdr" class="back-link">SDR</a>
         <a href="/settings" class="back-link">Settings</a>
         <a href="/" class="back-link">&larr; Dashboard</a>
-      </nav>
-    </header>
+{% endblock %}
 
+{% block content %}
     <section class="card">
       <div class="card-header">
         <h2>Pass Orchestrator</h2>
@@ -55,6 +50,7 @@
         <button id="orch-stop-btn" disabled>Stop</button>
       </div>
       <p class="hint" id="orch-current">&nbsp;</p>
+      <p class="hint command-line" id="orch-command"></p>
     </section>
 
     <section class="card">
@@ -128,7 +124,8 @@
 
       <div id="profiles-edit-view" style="display: none;"></div>
     </section>
+{% endblock %}
 
+{% block scripts %}
     <script src="/static/orchestrator.js"></script>
-  </body>
-</html>
+{% endblock %}

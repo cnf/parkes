@@ -1,10 +1,6 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ app_name }}</title>
-    <link rel="stylesheet" href="/static/style.css" />
+{% extends "base.html" %}
+
+{% block styles %}
     <style>
       .instrument-readout { display: flex; justify-content: space-evenly; font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-bottom: 0.8rem; }
       .instrument-readout .unit { font-weight: normal; color: var(--text-muted); }
@@ -60,19 +56,16 @@
       .location-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
       .location-fields input:disabled { opacity: 0.5; }
     </style>
-  </head>
-  <body>
-    <header>
-      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
-      <h1>{{ app_name }}</h1>
-      <nav class="nav-links">
+{% endblock %}
+
+{% block nav %}
         <button id="location-btn" class="back-link" type="button">&#128205; Location</button>
         <a href="/orchestrator" class="back-link">Pass Orchestrator</a>
         <a href="/sdr" class="back-link">SDR</a>
         <a href="/settings" class="back-link">Settings</a>
-      </nav>
-    </header>
+{% endblock %}
 
+{% block content %}
     <div class="page-grid">
     <section class="card">
       <div class="card-header">
@@ -148,7 +141,11 @@
         <span class="status-pill"><span class="status-dot" id="orchestrator-dot"></span><span id="orchestrator-status"></span></span>
       </div>
       <p class="log-preview" id="orchestrator-last-line">&nbsp;</p>
-      <a href="/orchestrator" class="back-link">Manage orchestrator &rarr;</a>
+      <p class="hint command-line" id="orchestrator-command"></p>
+      <div class="row">
+        <button id="orchestrator-toggle-btn" class="primary" type="button" disabled>Start</button>
+        <a href="/orchestrator" class="back-link">Manage orchestrator &rarr;</a>
+      </div>
     </section>
     </div>
 
@@ -179,10 +176,11 @@
         </div>
       </div>
     </div>
+{% endblock %}
 
+{% block scripts %}
     <script src="/static/rotator.js"></script>
     <script src="/static/tracking.js"></script>
     <script src="/static/orchestrator-status.js"></script>
     <script src="/static/location.js"></script>
-  </body>
-</html>
+{% endblock %}

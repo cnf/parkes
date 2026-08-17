@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }}{% block title_suffix %}{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    {% block styles %}{% endblock %}
+  </head>
+  <body>
+    <header>
+      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
+      <a href="/" class="brand-link"><h1>{{ app_name }}</h1></a>
+      <nav class="nav-links">
+        {% block nav %}{% endblock %}
+      </nav>
+    </header>
+
+    {% block content %}{% endblock %}
+
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

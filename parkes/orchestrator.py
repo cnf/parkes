@@ -65,6 +65,7 @@ class PassOrchestrator:
         self.current_target: str | None = None
         self.current_profile: str | None = None
         self.current_continuous: bool = False
+        self.current_command: list[str] | None = None
 
     @property
     def running(self) -> bool:
@@ -90,6 +91,7 @@ class PassOrchestrator:
         self.current_target = None
         self.current_profile = None
         self.current_continuous = False
+        self.current_command = None
 
     async def _run(self) -> None:
         while True:
@@ -211,6 +213,7 @@ class PassOrchestrator:
             logger.warning("orchestrator: unknown app profile %r for %s", profile_name, target_id)
 
         self.current_profile = profile.get("name", profile_name) if command is not None else None
+        self.current_command = command
 
         # One try/finally around acquire..the wait loop so a cancelled task
         # (stop() mid-pass, or the loop below deciding to yield to a
@@ -257,6 +260,7 @@ class PassOrchestrator:
             self.current_target = None
             self.current_profile = None
             self.current_continuous = False
+            self.current_command = None
 
 
 def find_overlaps(sky: SkyTracker, search_hours: float = 48.0) -> list[dict]:

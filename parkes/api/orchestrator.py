@@ -1,3 +1,4 @@
+import shlex
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -64,6 +65,7 @@ def status(request: Request):
         "current_target_name": target_name,
         "current_profile": orch.current_profile,
         "current_continuous": orch.current_continuous,
+        "current_command": shlex.join(orch.current_command) if orch.current_command else None,
     }
 
 

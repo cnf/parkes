@@ -54,6 +54,8 @@ header .dots { display: inline-flex; gap: 0.3rem; }
 header .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 header .dot.dot2 { background: var(--accent2); }
 h1 { font-size: 1.4rem; margin: 0; }
+.brand-link { color: inherit; text-decoration: none; }
+.brand-link:hover h1 { color: var(--accent2); }
 header p { margin: 0; color: var(--text-muted); font-size: 0.85rem; }
 .nav-links { margin-left: auto; display: flex; gap: 1rem; align-items: baseline; }
 .back-link { color: var(--text-muted); font-size: 0.85rem; text-decoration: none; }
@@ -77,6 +79,11 @@ header p { margin: 0; color: var(--text-muted); font-size: 0.85rem; }
 }
 .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.1rem; }
 
+.command-line {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8rem;
+  overflow-wrap: break-word;
+}
+
 .status-pill { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--text-muted); }
 .status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--text-muted); transition: background 0.2s; }
 .status-dot.on { background: var(--success); }
@@ -99,6 +106,9 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
 button.primary:disabled { opacity: 0.35; }
 button.btn-sm { padding: 0.25rem 0.65rem; font-size: 0.8rem; }
+button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+button.danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+button.danger:disabled { opacity: 0.35; }
 .btn-block { width: 100%; }
 
 label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--text-muted); }

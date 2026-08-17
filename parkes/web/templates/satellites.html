@@ -1,10 +1,8 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ app_name }} &middot; Satellites</title>
-    <link rel="stylesheet" href="/static/style.css" />
+{% extends "base.html" %}
+
+{% block title_suffix %} &middot; Satellites{% endblock %}
+
+{% block styles %}
     <style>
       .hint { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1rem; }
 
@@ -24,17 +22,14 @@
       .age-fresh { color: var(--success); }
       .age-stale { color: var(--danger); }
     </style>
-  </head>
-  <body>
-    <header>
-      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
-      <h1>{{ app_name }}</h1>
-      <nav class="nav-links">
+{% endblock %}
+
+{% block nav %}
         <a href="/settings" class="back-link">Settings</a>
         <a href="/" class="back-link">&larr; Dashboard</a>
-      </nav>
-    </header>
+{% endblock %}
 
+{% block content %}
     <section class="card">
       <div class="card-header">
         <h2>Fixed Targets</h2>
@@ -84,7 +79,8 @@
         </table>
       </div>
     </section>
+{% endblock %}
 
+{% block scripts %}
     <script src="/static/groups.js"></script>
-  </body>
-</html>
+{% endblock %}

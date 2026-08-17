@@ -46,6 +46,7 @@
   const orchStartBtn = document.getElementById("orch-start-btn");
   const orchStopBtn = document.getElementById("orch-stop-btn");
   const orchCurrentEl = document.getElementById("orch-current");
+  const orchCommandEl = document.getElementById("orch-command");
 
   async function refreshOrchStatus() {
     const status = await apiFetch("/api/orchestrator/status");
@@ -54,6 +55,7 @@
     orchStartBtn.disabled = status.running;
     orchStopBtn.disabled = !status.running;
     orchCurrentEl.textContent = status.current_target ? `tracking: ${status.current_target}` : " ";
+    orchCommandEl.textContent = status.current_command || "";
   }
 
   orchStartBtn.addEventListener("click", async () => {

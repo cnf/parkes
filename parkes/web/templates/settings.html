@@ -1,10 +1,8 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ app_name }} &middot; Settings</title>
-    <link rel="stylesheet" href="/static/style.css" />
+{% extends "base.html" %}
+
+{% block title_suffix %} &middot; Settings{% endblock %}
+
+{% block styles %}
     <style>
       .settings-section { margin-bottom: 1.4rem; }
       .settings-section:last-of-type { margin-bottom: 1rem; }
@@ -24,17 +22,14 @@
       #add-source-form .field-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
       #add-source-form .field-row label { flex: 1; min-width: 10rem; }
     </style>
-  </head>
-  <body>
-    <header>
-      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
-      <h1>{{ app_name }}</h1>
-      <nav class="nav-links">
+{% endblock %}
+
+{% block nav %}
         <a href="/sdr" class="back-link">SDR</a>
         <a href="/" class="back-link">&larr; Dashboard</a>
-      </nav>
-    </header>
+{% endblock %}
 
+{% block content %}
     <section class="card">
       <div class="card-header">
         <h2>Preferences</h2>
@@ -101,8 +96,9 @@
         <button id="tle-refresh-btn" type="button" class="btn-sm">Refresh all sources</button>
       </details>
     </section>
+{% endblock %}
 
+{% block scripts %}
     <script src="/static/settings.js"></script>
     <script src="/static/sources.js"></script>
-  </body>
-</html>
+{% endblock %}

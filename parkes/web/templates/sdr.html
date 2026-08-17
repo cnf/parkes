@@ -1,27 +1,22 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ app_name }} &middot; SDR</title>
-    <link rel="stylesheet" href="/static/style.css" />
+{% extends "base.html" %}
+
+{% block title_suffix %} &middot; SDR{% endblock %}
+
+{% block styles %}
     <style>
       .hint { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1rem; }
       .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.8rem; }
       .table-scroll { overflow-x: auto; }
     </style>
-  </head>
-  <body>
-    <header>
-      <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
-      <h1>{{ app_name }}</h1>
-      <nav class="nav-links">
+{% endblock %}
+
+{% block nav %}
         <a href="/orchestrator" class="back-link">Orchestrator</a>
         <a href="/settings" class="back-link">Settings</a>
         <a href="/" class="back-link">&larr; Dashboard</a>
-      </nav>
-    </header>
+{% endblock %}
 
+{% block content %}
     <section class="card">
       <div class="card-header">
         <h2>SDR Devices</h2>
@@ -93,7 +88,8 @@
       </div>
       <p class="hint" id="sdr-error" style="color: var(--danger);"></p>
     </section>
+{% endblock %}
 
+{% block scripts %}
     <script src="/static/sdr.js"></script>
-  </body>
-</html>
+{% endblock %}
