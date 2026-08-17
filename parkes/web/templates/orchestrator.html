@@ -28,6 +28,23 @@
       .command-arg-input.is-placeholder { color: var(--accent); font-weight: 600; }
       .placeholder-quick-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem; }
       .placeholder-quick-row button { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; }
+
+      .seg-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
+      .seg-row button.active { border-color: var(--accent2); color: var(--accent2); }
+      .module-field-row { margin-bottom: 0.6rem; }
+      .module-fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem; }
+      .module-checks-row { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: 0.85rem; margin-bottom: 0.8rem; }
+      .module-checkbox { display: flex; flex-direction: row; align-items: center; gap: 0.35rem; font-size: 0.85rem; font-weight: normal; color: var(--text); }
+      .module-checkbox input { width: auto; accent-color: var(--accent); }
+      .module-preview-label { font-size: 0.8rem; color: var(--text-muted); margin: 0.8rem 0 0.4rem; }
+      .command-preview-box {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; background: var(--bg);
+        border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.7rem; line-height: 1.6; word-break: break-all;
+      }
+      .tok-flag { color: var(--accent2); font-weight: 600; }
+      .tok-placeholder { color: var(--accent); font-weight: 600; }
+      .module-advanced { margin-top: 1rem; }
+      .module-advanced summary { cursor: pointer; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem; }
       .table-scroll { overflow-x: auto; }
       table td { vertical-align: middle; }
       table td.actions-col { white-space: nowrap; text-align: right; }
@@ -116,7 +133,8 @@
         and needs <code>{frequency}</code>. A "standalone" profile has nothing to do with any
         satellite -- start/stop it by hand, or set it to auto-repeat. Other placeholders filled in
         at launch: <code>{output_dir}</code>, <code>{source}</code>, <code>{source_id}</code>,
-        <code>{samplerate}</code>.
+        <code>{samplerate}</code>, <code>{timestamp}</code> (fresh per run -- use it in an output
+        path so consecutive runs don't overwrite each other).
       </p>
 
       <div id="profiles-list-view">

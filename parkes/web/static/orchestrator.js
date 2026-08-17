@@ -97,12 +97,467 @@
   let profilesEditIndex = null;
   let profilesEditSnapshot = null;
   let satdumpPipelines = [];
+  let commandModules = [];
+  const remoteSearchCache = {};
 
   async function loadSatdumpPipelines() {
     try {
       satdumpPipelines = await apiFetch("/api/orchestrator/satdump_pipelines");
     } catch {
       satdumpPipelines = [];
+    }
+  }
+
+  async function loadCommandModules() {
+    try {
+      commandModules = await apiFetch("/api/orchestrator/command_modules");
+    } catch {
+      commandModules = [];
+    }
+  }
+
+  async function loadRemoteSearchOptions(url) {
+    if (!(url in remoteSearchCache)) {
+      try {
+        remoteSearchCache[url] = await apiFetch(url);
+      } catch {
+        remoteSearchCache[url] = [];
+      }
+    }
+    return remoteSearchCache[url];
+  }
+
+  function fillTemplate(template, obj) {
+    return template.replace(/\{(\w+)\}/g, (_, key) => obj[key] ?? "");
+  }
+
+  // ---------------------------------------------------------------------
+  // Command modules -- structured, per-command editors driven entirely by
+  // the schema api/orchestrator.py's /command_modules serves (see
+  // sdr/command_modules.py). Adding a new known command later means
+  // adding a schema there; nothing here is satdump-specific.
+  // ---------------------------------------------------------------------
+
+  function moduleFieldVisible(field, fields) {
+    if (!field.show_if) return true;
+    return fields[field.show_if.field] === field.show_if.equals;
+  }
+
+  function applyModuleFieldDefaults(mode, profile) {
+    for (const field of mode.fields) {
+      let value = field.default;
+      if (field.default_by_profile_mode && field.default_by_profile_mode[profile.mode] !== undefined) {
+        value = field.default_by_profile_mode[profile.mode];
+      }
+      const current = profile.moduleFields[field.key];
+      // Field keys are shared across a module's modes on purpose (e.g.
+      // switching live -> record keeps the source/samplerate you already
+      // set) -- but that means a field left blank by one mode (its
+      // default is empty/unset) can otherwise "lock in" before a
+      // *different* mode, sharing the same key, gets a chance to apply
+      // its own real default. Only skip applying this mode's default when
+      // the field already has a real value, or this mode has nothing
+      // more useful to offer than what's already there.
+      if (current !== undefined && current !== "" ) continue;
+      if (current === "" && (value === undefined || value === "")) continue;
+      profile.moduleFields[field.key] = value ?? (field.type === "checkbox" ? false : "");
+    }
+  }
+
+  function buildModuleCommand(mode, fields, extraArgs) {
+    const command = [...mode.prefix];
+    for (const field of mode.fields) {
+      if (!field.positional || !moduleFieldVisible(field, fields)) continue;
+      command.push(String(fields[field.key] ?? ""));
+    }
+    for (const field of mode.fields) {
+      if (field.positional || !moduleFieldVisible(field, fields)) continue;
+      const value = fields[field.key];
+      if (field.type === "checkbox") {
+        if (value) command.push(field.flag);
+      } else if (value !== undefined && value !== null && String(value).trim() !== "") {
+        command.push(field.flag, String(value));
+      }
+    }
+    command.push(...extraArgs);
+    return command;
+  }
+
+  function rebuildModuleCommand(profile) {
+    const module = commandModules.find((m) => m.id === profile.module);
+    const mode = module && module.modes.find((m) => m.id === profile.moduleMode);
+    if (!mode) return;
+    profile.command = buildModuleCommand(mode, profile.moduleFields, profile.moduleExtraArgs);
+  }
+
+  function previewTokenHtml(token) {
+    const escaped = escapeHtml(token);
+    if (token.startsWith("{") && token.endsWith("}")) return `<span class="tok-placeholder">${escaped}</span>`;
+    if (token.startsWith("-")) return `<span class="tok-flag">${escaped}</span>`;
+    return escaped;
+  }
+
+  function refreshModulePreview(profile) {
+    rebuildModuleCommand(profile);
+    const previewEl = document.getElementById("module-command-preview");
+    if (previewEl) previewEl.innerHTML = profile.command.map(previewTokenHtml).join(" ");
+  }
+
+  function renderModuleFieldRow(field, profile, rerender) {
+    const fields = profile.moduleFields;
+    const value = fields[field.key];
+
+    if (field.type === "checkbox") {
+      const label = document.createElement("label");
+      label.className = "module-checkbox";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!value;
+      cb.addEventListener("change", () => {
+        fields[field.key] = cb.checked;
+        rerender();
+      });
+      label.append(cb, document.createTextNode(" " + field.label));
+      return label;
+    }
+
+    const label = document.createElement("label");
+    let labelText = field.label;
+    if (field.unit) labelText += ` (${field.unit})`;
+    if (field.optional) labelText += " -- optional";
+    label.appendChild(document.createTextNode(labelText));
+
+    if (field.type === "select") {
+      const select = document.createElement("select");
+      for (const opt of field.options) {
+        const optionEl = document.createElement("option");
+        optionEl.value = opt;
+        optionEl.textContent = opt === "" ? "(none)" : opt;
+        optionEl.selected = opt === value;
+        select.appendChild(optionEl);
+      }
+      select.addEventListener("change", () => {
+        fields[field.key] = select.value;
+        rerender();
+      });
+      label.appendChild(select);
+      return label;
+    }
+
+    if (field.type === "remote_search") {
+      const wrap = document.createElement("div");
+      wrap.className = "group-search";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = value || "";
+      input.placeholder = "Search...";
+      const resultsEl = document.createElement("div");
+      resultsEl.className = "search-results";
+      resultsEl.style.display = "none";
+
+      if (value) {
+        loadRemoteSearchOptions(field.source_url).then((options) => {
+          const match = options.find((o) => o[field.value_key] === value);
+          if (match && input.value === value) input.value = fillTemplate(field.display_template, match);
+        });
+      }
+
+      input.addEventListener("input", async () => {
+        const q = input.value.trim().toLowerCase();
+        resultsEl.innerHTML = "";
+        if (!q) {
+          resultsEl.style.display = "none";
+          return;
+        }
+        const options = await loadRemoteSearchOptions(field.source_url);
+        const matches = options
+          .filter((opt) => field.search_keys.some((k) => String(opt[k] || "").toLowerCase().includes(q)))
+          .slice(0, 20);
+        resultsEl.innerHTML = "";
+        for (const opt of matches) {
+          const resultRow = document.createElement("div");
+          resultRow.className = "search-result-row";
+          resultRow.textContent = fillTemplate(field.display_template, opt);
+          resultRow.addEventListener("click", () => {
+            fields[field.key] = opt[field.value_key];
+            rerender();
+          });
+          resultsEl.appendChild(resultRow);
+        }
+        resultsEl.style.display = matches.length ? "block" : "none";
+      });
+
+      wrap.append(input, resultsEl);
+      label.appendChild(wrap);
+      return label;
+    }
+
+    // text
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = value || "";
+    input.className = value && String(value).startsWith("{") && String(value).endsWith("}") ? "is-placeholder" : "";
+    input.addEventListener("input", () => {
+      fields[field.key] = input.value;
+      input.className = input.value.startsWith("{") && input.value.endsWith("}") ? "is-placeholder" : "";
+      refreshModulePreview(profile);
+    });
+    label.appendChild(input);
+    return label;
+  }
+
+  function renderModuleEditor(container, profile) {
+    const module = commandModules.find((m) => m.id === profile.module);
+    if (!module) return;
+    const mode = module.modes.find((m) => m.id === profile.moduleMode) || module.modes[0];
+    applyModuleFieldDefaults(mode, profile);
+
+    const modeLabel = document.createElement("div");
+    modeLabel.className = "field-label";
+    modeLabel.textContent = "Mode";
+    container.appendChild(modeLabel);
+
+    const modeSeg = document.createElement("div");
+    modeSeg.className = "seg-row";
+    for (const m of module.modes) {
+      const modeBtn = document.createElement("button");
+      modeBtn.type = "button";
+      modeBtn.className = "btn-sm" + (m.id === mode.id ? " active" : "");
+      modeBtn.textContent = m.label;
+      modeBtn.addEventListener("click", () => {
+        profile.moduleMode = m.id;
+        applyModuleFieldDefaults(m, profile);
+        rebuildModuleCommand(profile);
+        renderProfileEdit();
+      });
+      modeSeg.appendChild(modeBtn);
+    }
+    container.appendChild(modeSeg);
+
+    const rerender = () => {
+      rebuildModuleCommand(profile);
+      renderProfileEdit();
+    };
+
+    const fullWidthFields = mode.fields.filter(
+      (f) => moduleFieldVisible(f, profile.moduleFields) && (f.positional || f.type === "remote_search")
+    );
+    const checkboxFields = mode.fields.filter(
+      (f) => moduleFieldVisible(f, profile.moduleFields) && !f.positional && f.type === "checkbox"
+    );
+    const gridFields = mode.fields.filter(
+      (f) =>
+        moduleFieldVisible(f, profile.moduleFields) &&
+        !f.positional &&
+        f.type !== "checkbox" &&
+        f.type !== "remote_search"
+    );
+
+    for (const field of fullWidthFields) {
+      const row = document.createElement("div");
+      row.className = "module-field-row";
+      row.appendChild(renderModuleFieldRow(field, profile, rerender));
+      container.appendChild(row);
+    }
+
+    if (gridFields.length > 0) {
+      const grid = document.createElement("div");
+      grid.className = "module-fields-grid";
+      for (const field of gridFields) grid.appendChild(renderModuleFieldRow(field, profile, rerender));
+      container.appendChild(grid);
+    }
+
+    if (checkboxFields.length > 0) {
+      const checksRow = document.createElement("div");
+      checksRow.className = "module-checks-row";
+      for (const field of checkboxFields) checksRow.appendChild(renderModuleFieldRow(field, profile, rerender));
+      container.appendChild(checksRow);
+    }
+
+    rebuildModuleCommand(profile);
+    const previewLabel = document.createElement("div");
+    previewLabel.className = "module-preview-label";
+    previewLabel.textContent = "Command preview";
+    container.appendChild(previewLabel);
+    const preview = document.createElement("div");
+    preview.id = "module-command-preview";
+    preview.className = "command-preview-box";
+    preview.innerHTML = profile.command.map(previewTokenHtml).join(" ");
+    container.appendChild(preview);
+
+    const advanced = document.createElement("details");
+    advanced.className = "module-advanced";
+    // Editing an extra arg re-renders the whole form (same as everything
+    // else here) -- remember whether this was open so that doesn't look
+    // like the section slamming shut on you mid-edit.
+    advanced.open = !!profile._advancedOpen;
+    advanced.addEventListener("toggle", () => {
+      profile._advancedOpen = advanced.open;
+    });
+    const summary = document.createElement("summary");
+    summary.textContent = "Advanced -- extra command-line args";
+    advanced.appendChild(summary);
+    renderRawCommandEditor(advanced, profile.moduleExtraArgs, profile.mode, {
+      onChange: rerender,
+      includeSatdumpTemplatePicker: false,
+    });
+    container.appendChild(advanced);
+  }
+
+  function renderRawCommandEditor(container, commandArray, profileMode, options) {
+    function argClass(value) {
+      if (value.startsWith("{") && value.endsWith("}")) return "command-arg-input is-placeholder";
+      if (value.startsWith("-")) return "command-arg-input is-flag";
+      return "command-arg-input";
+    }
+
+    const argsList = document.createElement("div");
+    argsList.className = "command-args-list";
+    commandArray.forEach((arg, argIndex) => {
+      const row = document.createElement("div");
+      row.className = "command-arg-row";
+
+      const upBtn = document.createElement("button");
+      upBtn.type = "button";
+      upBtn.className = "btn-sm";
+      upBtn.textContent = "↑";
+      upBtn.title = "Move earlier";
+      upBtn.disabled = argIndex === 0;
+      upBtn.addEventListener("click", () => {
+        [commandArray[argIndex - 1], commandArray[argIndex]] = [commandArray[argIndex], commandArray[argIndex - 1]];
+        options.onChange();
+      });
+
+      const downBtn = document.createElement("button");
+      downBtn.type = "button";
+      downBtn.className = "btn-sm";
+      downBtn.textContent = "↓";
+      downBtn.title = "Move later";
+      downBtn.disabled = argIndex === commandArray.length - 1;
+      downBtn.addEventListener("click", () => {
+        [commandArray[argIndex + 1], commandArray[argIndex]] = [commandArray[argIndex], commandArray[argIndex + 1]];
+        options.onChange();
+      });
+
+      const argInput = document.createElement("input");
+      argInput.type = "text";
+      argInput.value = arg;
+      argInput.className = argClass(arg);
+      argInput.addEventListener("input", () => {
+        commandArray[argIndex] = argInput.value;
+        argInput.className = argClass(argInput.value);
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn-sm";
+      removeBtn.textContent = "×";
+      removeBtn.title = "Remove";
+      removeBtn.addEventListener("click", () => {
+        commandArray.splice(argIndex, 1);
+        options.onChange();
+      });
+
+      row.append(upBtn, downBtn, argInput, removeBtn);
+      argsList.appendChild(row);
+    });
+    container.appendChild(argsList);
+
+    const searchWrap = document.createElement("div");
+    searchWrap.className = "group-search";
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "Add a command arg, press Enter (e.g. --frequency or {frequency})";
+    addInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const value = addInput.value.trim();
+      if (value) {
+        commandArray.push(value);
+        options.onChange();
+      }
+    });
+    searchWrap.appendChild(addInput);
+    container.appendChild(searchWrap);
+
+    const placeholderRow = document.createElement("div");
+    placeholderRow.className = "placeholder-quick-row";
+    placeholderRow.appendChild(document.createTextNode("Insert:"));
+    const availablePlaceholders = ["{output_dir}", "{source}", "{source_id}", "{samplerate}", "{timestamp}"];
+    if (profileMode === "pass") availablePlaceholders.unshift("{frequency}");
+    for (const ph of availablePlaceholders) {
+      const phBtn = document.createElement("button");
+      phBtn.type = "button";
+      phBtn.className = "btn-sm";
+      phBtn.textContent = ph;
+      phBtn.addEventListener("click", () => {
+        commandArray.push(ph);
+        options.onChange();
+      });
+      placeholderRow.appendChild(phBtn);
+    }
+    container.appendChild(placeholderRow);
+
+    // Templates read straight from the installed satdump's own pipeline
+    // definitions (see api/orchestrator.py's /satdump_pipelines), so the
+    // command skeleton they produce stays accurate across satdump versions
+    // instead of us guessing at flags. Absent if satdump isn't installed
+    // (see loadSatdumpPipelines()) or this editor is scoped to a module's
+    // "extra args" (which already has its own pipeline field).
+    if (options.includeSatdumpTemplatePicker && satdumpPipelines.length > 0) {
+      const templateWrap = document.createElement("div");
+      templateWrap.className = "group-search";
+      templateWrap.style.marginTop = "0.8rem";
+
+      const templateInput = document.createElement("input");
+      templateInput.type = "text";
+      templateInput.placeholder = "Start from a satdump pipeline... (e.g. noaa, meteor)";
+      const templateResultsEl = document.createElement("div");
+      templateResultsEl.className = "search-results";
+      templateResultsEl.style.display = "none";
+
+      templateInput.addEventListener("input", () => {
+        const q = templateInput.value.trim().toLowerCase();
+        templateResultsEl.innerHTML = "";
+        if (!q) {
+          templateResultsEl.style.display = "none";
+          return;
+        }
+        const matches = satdumpPipelines
+          .filter(
+            (p) =>
+              p.name.toLowerCase().includes(q) ||
+              p.id.toLowerCase().includes(q) ||
+              p.family.toLowerCase().includes(q)
+          )
+          .slice(0, 20);
+        for (const p of matches) {
+          const row = document.createElement("div");
+          row.className = "search-result-row";
+          row.innerHTML = `<span>${escapeHtml(p.name)} <span style="color: var(--text-muted);">(${escapeHtml(p.family)})</span></span><span style="color: var(--text-muted);">${escapeHtml(p.id)}</span>`;
+          row.addEventListener("click", () => {
+            commandArray.length = 0;
+            commandArray.push(
+              "satdump",
+              "live",
+              p.id,
+              "{output_dir}",
+              "--source",
+              "{source}",
+              "--samplerate",
+              "{samplerate}",
+              ...(profileMode === "pass" ? ["--frequency", "{frequency}"] : [])
+            );
+            if (options.onSelectPipeline) options.onSelectPipeline(p);
+            options.onChange();
+          });
+          templateResultsEl.appendChild(row);
+        }
+        templateResultsEl.style.display = matches.length ? "block" : "none";
+      });
+
+      templateWrap.append(templateInput, templateResultsEl);
+      container.appendChild(templateWrap);
     }
   }
 
@@ -153,6 +608,14 @@
       command: profile.command,
       mode: profile.mode,
       uses_sdr: profile.usesSdr,
+      ...(profile.module
+        ? {
+            module: profile.module,
+            module_mode: profile.moduleMode,
+            module_fields: profile.moduleFields,
+            module_extra_args: profile.moduleExtraArgs,
+          }
+        : {}),
       ...(profile.mode === "standalone" && profile.scheduleMinutes
         ? { schedule_seconds: profile.scheduleMinutes * 60 }
         : {}),
@@ -331,171 +794,64 @@
     );
     profilesEditView.appendChild(usesSdrLabel);
 
-    // Each command arg gets its own editable row -- reorder with ↑/↓
-    // (there's no drag-and-drop; this is simpler and works on touch too),
-    // edit its text directly, or remove it. Flags (-x/--xxx) and
-    // {placeholder} tokens get a distinct color so the shape of the
-    // command is readable at a glance instead of a wall of plain text.
-    function argClass(value) {
-      if (value.startsWith("{") && value.endsWith("}")) return "command-arg-input is-placeholder";
-      if (value.startsWith("-")) return "command-arg-input is-flag";
-      return "command-arg-input";
-    }
+    // Command type: a known command module (structured form) or the raw,
+    // freeform arg-list editor -- always available as an escape hatch,
+    // even for a command a module also covers, for the one case that
+    // doesn't fit the structured form.
+    const typeLabel = document.createElement("div");
+    typeLabel.className = "field-label";
+    typeLabel.textContent = "Command type";
+    profilesEditView.appendChild(typeLabel);
 
-    const argsList = document.createElement("div");
-    argsList.className = "command-args-list";
-    profile.command.forEach((arg, argIndex) => {
-      const row = document.createElement("div");
-      row.className = "command-arg-row";
-
-      const upBtn = document.createElement("button");
-      upBtn.type = "button";
-      upBtn.className = "btn-sm";
-      upBtn.textContent = "↑";
-      upBtn.title = "Move earlier";
-      upBtn.disabled = argIndex === 0;
-      upBtn.addEventListener("click", () => {
-        const c = profile.command;
-        [c[argIndex - 1], c[argIndex]] = [c[argIndex], c[argIndex - 1]];
-        renderProfileEdit();
-      });
-
-      const downBtn = document.createElement("button");
-      downBtn.type = "button";
-      downBtn.className = "btn-sm";
-      downBtn.textContent = "↓";
-      downBtn.title = "Move later";
-      downBtn.disabled = argIndex === profile.command.length - 1;
-      downBtn.addEventListener("click", () => {
-        const c = profile.command;
-        [c[argIndex + 1], c[argIndex]] = [c[argIndex], c[argIndex + 1]];
-        renderProfileEdit();
-      });
-
-      const argInput = document.createElement("input");
-      argInput.type = "text";
-      argInput.value = arg;
-      argInput.className = argClass(arg);
-      argInput.addEventListener("input", () => {
-        profile.command[argIndex] = argInput.value;
-        argInput.className = argClass(argInput.value);
-      });
-
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "btn-sm";
-      removeBtn.textContent = "×";
-      removeBtn.title = "Remove";
-      removeBtn.addEventListener("click", () => {
-        profile.command.splice(argIndex, 1);
-        renderProfileEdit();
-      });
-
-      row.append(upBtn, downBtn, argInput, removeBtn);
-      argsList.appendChild(row);
+    const typeSeg = document.createElement("div");
+    typeSeg.className = "seg-row";
+    const customTypeBtn = document.createElement("button");
+    customTypeBtn.type = "button";
+    customTypeBtn.className = "btn-sm" + (profile.module ? "" : " active");
+    customTypeBtn.textContent = "Custom command";
+    customTypeBtn.addEventListener("click", () => {
+      profile.module = null;
+      profile.moduleMode = null;
+      renderProfileEdit();
     });
-    profilesEditView.appendChild(argsList);
-
-    const searchWrap = document.createElement("div");
-    searchWrap.className = "group-search";
-    const addInput = document.createElement("input");
-    addInput.type = "text";
-    addInput.placeholder = "Add a command arg, press Enter (e.g. --frequency or {frequency})";
-    addInput.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      const value = addInput.value.trim();
-      if (value) {
-        profile.command.push(value);
-        renderProfileEdit();
-      }
-    });
-    searchWrap.appendChild(addInput);
-    profilesEditView.appendChild(searchWrap);
-
-    const placeholderRow = document.createElement("div");
-    placeholderRow.className = "placeholder-quick-row";
-    placeholderRow.appendChild(document.createTextNode("Insert:"));
-    const availablePlaceholders = ["{output_dir}", "{source}", "{source_id}", "{samplerate}"];
-    if (profile.mode === "pass") availablePlaceholders.unshift("{frequency}");
-    for (const ph of availablePlaceholders) {
-      const phBtn = document.createElement("button");
-      phBtn.type = "button";
-      phBtn.className = "btn-sm";
-      phBtn.textContent = ph;
-      phBtn.addEventListener("click", () => {
-        profile.command.push(ph);
+    typeSeg.appendChild(customTypeBtn);
+    for (const module of commandModules) {
+      const moduleBtn = document.createElement("button");
+      moduleBtn.type = "button";
+      moduleBtn.className = "btn-sm" + (profile.module === module.id ? " active" : "");
+      moduleBtn.textContent = module.label;
+      moduleBtn.addEventListener("click", () => {
+        const modeStillValid =
+          profile.module === module.id && module.modes.some((m) => m.id === profile.moduleMode);
+        profile.module = module.id;
+        if (!modeStillValid) profile.moduleMode = module.modes[0].id;
+        profile.moduleFields = profile.moduleFields || {};
+        profile.moduleExtraArgs = profile.moduleExtraArgs || [];
+        const mode = module.modes.find((m) => m.id === profile.moduleMode);
+        applyModuleFieldDefaults(mode, profile);
+        rebuildModuleCommand(profile);
         renderProfileEdit();
       });
-      placeholderRow.appendChild(phBtn);
+      typeSeg.appendChild(moduleBtn);
     }
-    profilesEditView.appendChild(placeholderRow);
+    profilesEditView.appendChild(typeSeg);
 
-    // Templates read straight from the installed satdump's own pipeline
-    // definitions (see api/orchestrator.py's /satdump_pipelines), so the
-    // command skeleton they produce stays accurate across satdump versions
-    // instead of us guessing at flags. Absent entirely if satdump isn't
-    // installed -- see loadSatdumpPipelines().
-    if (satdumpPipelines.length > 0) {
-      const templateWrap = document.createElement("div");
-      templateWrap.className = "group-search";
-      templateWrap.style.marginTop = "0.8rem";
-
-      const templateInput = document.createElement("input");
-      templateInput.type = "text";
-      templateInput.placeholder = "Start from a satdump pipeline... (e.g. noaa, meteor)";
-      const templateResultsEl = document.createElement("div");
-      templateResultsEl.className = "search-results";
-      templateResultsEl.style.display = "none";
-
-      templateInput.addEventListener("input", () => {
-        const q = templateInput.value.trim().toLowerCase();
-        templateResultsEl.innerHTML = "";
-        if (!q) {
-          templateResultsEl.style.display = "none";
-          return;
-        }
-        const matches = satdumpPipelines
-          .filter(
-            (p) =>
-              p.name.toLowerCase().includes(q) ||
-              p.id.toLowerCase().includes(q) ||
-              p.family.toLowerCase().includes(q)
-          )
-          .slice(0, 20);
-        for (const p of matches) {
-          const row = document.createElement("div");
-          row.className = "search-result-row";
-          row.innerHTML = `<span>${escapeHtml(p.name)} <span style="color: var(--text-muted);">(${escapeHtml(p.family)})</span></span><span style="color: var(--text-muted);">${escapeHtml(p.id)}</span>`;
-          row.addEventListener("click", () => {
-            profile.command = [
-              "satdump",
-              "live",
-              p.id,
-              "{output_dir}",
-              "--source",
-              "{source}",
-              "--samplerate",
-              "{samplerate}",
-              ...(profile.mode === "pass" ? ["--frequency", "{frequency}"] : []),
-            ];
-            profile._pipelineHint = p.frequencies.length
-              ? `Typical frequencies for ${p.name}: ` +
-                p.frequencies
-                  .slice(0, 4)
-                  .map(([label, hz]) => `${label} ${(hz / 1e6).toFixed(3)} MHz`)
-                  .join(", ")
-              : null;
-            renderProfileEdit();
-          });
-          templateResultsEl.appendChild(row);
-        }
-        templateResultsEl.style.display = matches.length ? "block" : "none";
+    if (profile.module) {
+      renderModuleEditor(profilesEditView, profile);
+    } else {
+      renderRawCommandEditor(profilesEditView, profile.command, profile.mode, {
+        onChange: renderProfileEdit,
+        includeSatdumpTemplatePicker: true,
+        onSelectPipeline: (p) => {
+          profile._pipelineHint = p.frequencies.length
+            ? `Typical frequencies for ${p.name}: ` +
+              p.frequencies
+                .slice(0, 4)
+                .map(([label, hz]) => `${label} ${(hz / 1e6).toFixed(3)} MHz`)
+                .join(", ")
+            : null;
+        },
       });
-
-      templateWrap.append(templateInput, templateResultsEl);
-      profilesEditView.appendChild(templateWrap);
-
       if (profile._pipelineHint) {
         const hintP = document.createElement("p");
         hintP.className = "hint";
@@ -573,7 +929,18 @@
   }
 
   addProfileBtn.addEventListener("click", () => {
-    profiles.push({ id: null, name: "", command: [], mode: "pass", usesSdr: true, scheduleMinutes: null });
+    profiles.push({
+      id: null,
+      name: "",
+      command: [],
+      mode: "pass",
+      usesSdr: true,
+      scheduleMinutes: null,
+      module: null,
+      moduleMode: null,
+      moduleFields: {},
+      moduleExtraArgs: [],
+    });
     enterProfileEdit(profiles.length - 1);
   });
 
@@ -586,6 +953,10 @@
       mode: profile.mode === "standalone" ? "standalone" : "pass",
       usesSdr: profile.uses_sdr !== false,
       scheduleMinutes: profile.schedule_seconds ? Math.round(profile.schedule_seconds / 60) : null,
+      module: profile.module || null,
+      moduleMode: profile.module_mode || null,
+      moduleFields: profile.module_fields ? { ...profile.module_fields } : {},
+      moduleExtraArgs: profile.module_extra_args ? [...profile.module_extra_args] : [],
     }));
   }
 
@@ -1004,7 +1375,13 @@
   // ---------------------------------------------------------------------
 
   async function init() {
-    await Promise.all([loadProfiles(), loadObjects(), loadOverlaps(), loadSatdumpPipelines()]);
+    await Promise.all([
+      loadProfiles(),
+      loadObjects(),
+      loadOverlaps(),
+      loadSatdumpPipelines(),
+      loadCommandModules(),
+    ]);
     renderProfilesList();
     renderTrackedList();
     await refreshStandaloneStatus();

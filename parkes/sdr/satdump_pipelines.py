@@ -55,14 +55,14 @@ def _pipelines_dir() -> Path | None:
 
 
 @functools.lru_cache(maxsize=1)
-def list_live_pipelines() -> list[dict]:
-    """Live-capable satdump pipelines, read straight from the installed
-    satdump's own pipeline definitions (share/satdump/pipelines/*.json) --
-    used to offer accurate App Profile templates without hardcoding pipeline
-    ids/flags here, which would drift across satdump versions (see
-    app_profiles.py's DEFAULT_PROFILES comment). Returns [] if satdump
-    isn't installed or its pipeline defs can't be found, so the App
-    Profiles UI just skips offering templates rather than failing.
+def list_all_pipelines() -> list[dict]:
+    """Every satdump pipeline (live-capable or not), read straight from the
+    installed satdump's own pipeline definitions (share/satdump/pipelines/
+    *.json) -- used to offer accurate App Profile templates/pickers without
+    hardcoding pipeline ids/flags here, which would drift across satdump
+    versions (see app_profiles.py's DEFAULT_PROFILES comment). Returns []
+    if satdump isn't installed or its pipeline defs can't be found, so
+    callers just skip offering pipeline data rather than failing.
     """
     pipelines_dir = _pipelines_dir()
     if pipelines_dir is None:
@@ -75,15 +75,22 @@ def list_live_pipelines() -> list[dict]:
         except (json.JSONDecodeError, OSError):
             continue
         for pipeline_id, entry in data.items():
-            if not entry.get("live"):
-                continue
             pipelines.append(
                 {
                     "id": pipeline_id,
                     "name": entry.get("name", pipeline_id),
                     "family": path.stem,
+                    "live": bool(entry.get("live")),
                     "frequencies": entry.get("frequencies", []),
                 }
             )
     pipelines.sort(key=lambda p: (p["family"], p["name"]))
     return pipelines
+
+
+def list_live_pipelines() -> list[dict]:
+    """Live-capable subset of list_all_pipelines() -- what "satdump live"
+    can actually run against an SDR, as opposed to offline-only pipelines
+    that only take a recorded file as input.
+    """
+    return [p for p in list_all_pipelines() if p["live"]]

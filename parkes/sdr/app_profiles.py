@@ -1,12 +1,14 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from parkes.config import settings
 from parkes.preferences import preferences
 
 # A starter profile showing the expected shape -- {frequency}/{output_dir}/
-# {source}/{source_id}/{samplerate} are filled in at launch time (frequency
-# only for "pass"-mode profiles, from their triggering downlink; the rest
+# {source}/{source_id}/{samplerate}/{timestamp} are filled in at launch
+# time (frequency only for "pass"-mode profiles, from their triggering
+# downlink; timestamp is fresh per launch, see resolve_command; the rest
 # from current preferences). Verify these flags against `satdump live
 # --help` for your installed satdump version before relying on it; CLI
 # flags aren't guaranteed stable across releases.
@@ -87,6 +89,11 @@ def resolve_command(command: list[str], **overrides) -> list[str]:
     via str.format if the command references a placeholder that isn't
     supplied -- e.g. {frequency} on a standalone profile, which has no
     downlink to take it from.
+
+    {timestamp} is computed fresh on every call (not cached/shared) --
+    it's meant to be used in an output path/filename (e.g.
+    "{output_dir}/{timestamp}") so consecutive runs of the same profile
+    don't overwrite each other's output.
     """
     prefs = preferences.get_all()
     values = {
@@ -94,6 +101,7 @@ def resolve_command(command: list[str], **overrides) -> list[str]:
         "source": prefs["satdump_sdr_source"],
         "source_id": prefs["satdump_sdr_source_id"] or "",
         "samplerate": prefs["satdump_samplerate"],
+        "timestamp": datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"),
         **overrides,
     }
     return [part.format(**values) for part in command]

@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from parkes.orchestrator import PassOrchestrator, find_overlaps
 from parkes.preferences import preferences
 from parkes.sdr.app_profiles import delete_profile, load_profiles, put_profile
-from parkes.sdr.satdump_pipelines import list_live_pipelines
+from parkes.sdr.command_modules import list_command_modules
+from parkes.sdr.satdump_pipelines import list_all_pipelines, list_live_pipelines
 from parkes.standalone_apps import StandaloneAppRunner
 from parkes.tracking.sky import SkyTracker
 from parkes.tracking.tracked_objects import (
@@ -41,6 +42,14 @@ class UpsertProfileRequest(BaseModel):
     uses_sdr: bool = True
     command: list[str]
     schedule_seconds: float | None = None
+    # Editor metadata only -- `command` (above) is always the actual,
+    # already-resolved arg list that gets executed; these three just let
+    # the App Profiles editor reconstruct its structured form next time
+    # it's opened. Parkes itself never reads them (see command_modules.py).
+    module: str | None = None
+    module_mode: str | None = None
+    module_fields: dict | None = None
+    module_extra_args: list[str] | None = None
 
 
 def _orchestrator(request: Request) -> PassOrchestrator:
@@ -139,8 +148,13 @@ def get_app_profiles():
 
 
 @router.get("/satdump_pipelines")
-def get_satdump_pipelines():
-    return list_live_pipelines()
+def get_satdump_pipelines(live_only: bool = True):
+    return list_live_pipelines() if live_only else list_all_pipelines()
+
+
+@router.get("/command_modules")
+def get_command_modules():
+    return list_command_modules()
 
 
 @router.put("/app_profiles/{profile_id}")
@@ -153,6 +167,11 @@ def put_app_profile(profile_id: str, body: UpsertProfileRequest):
     }
     if body.schedule_seconds:
         profile["schedule_seconds"] = body.schedule_seconds
+    if body.module:
+        profile["module"] = body.module
+        profile["module_mode"] = body.module_mode
+        profile["module_fields"] = body.module_fields or {}
+        profile["module_extra_args"] = body.module_extra_args or []
     put_profile(profile_id, profile)
     return {"status": "ok"}
 
