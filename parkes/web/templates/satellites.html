@@ -16,11 +16,12 @@
       .satellites-toolbar input[type="text"] { flex: 1 1 14rem; }
       .satellites-toolbar select { flex: 0 1 12rem; }
       .table-scroll { overflow-x: auto; }
-      #satellites-table { min-width: 34rem; }
-      #satellites-table th.group-col, #satellites-table td.group-col { text-align: center; white-space: nowrap; }
-      #satellites-table td.group-col input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+      #satellites-table { min-width: 30rem; }
       .age-fresh { color: var(--success); }
       .age-stale { color: var(--danger); }
+
+      #group-modal-members { max-height: 24rem; overflow-y: auto; margin-bottom: 0.8rem; }
+      #group-modal-members .search-result-row:not(:last-child) { border-bottom: 1px solid var(--border); }
     </style>
 {% endblock %}
 
@@ -47,8 +48,8 @@
       </div>
       <p class="hint">
         Enabled groups' satellites show up in the Sky Tracking list on the dashboard.
-        Pick which satellites belong to which group in the table below. TLE sources are managed
-        on the <a href="/settings">Settings</a> page.
+        Click a group to add or remove satellites. TLE sources are managed on the
+        <a href="/settings">Settings</a> page.
       </p>
       <div id="groups-list"></div>
       <form id="new-group-form" class="row" style="margin-top: 0.3rem;">
@@ -71,7 +72,7 @@
       <div class="table-scroll">
         <table id="satellites-table">
           <thead>
-            <tr id="satellites-head-row">
+            <tr>
               <th>Name</th><th>NORAD</th><th>Source</th><th>TLE age</th>
             </tr>
           </thead>
@@ -79,6 +80,20 @@
         </table>
       </div>
     </section>
+
+    <div id="group-modal-overlay" class="modal-overlay">
+      <div class="modal-dialog modal-lg">
+        <div class="card-header">
+          <h2 id="group-modal-title">Group</h2>
+          <button id="group-modal-close" type="button" class="btn-sm">&times;</button>
+        </div>
+        <div id="group-modal-members"></div>
+        <div class="group-search">
+          <input id="group-modal-search-input" type="text" placeholder="Search satellites to add..." autocomplete="off" />
+          <div id="group-modal-search-results" class="search-results" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
 {% endblock %}
 
 {% block scripts %}

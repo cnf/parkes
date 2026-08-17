@@ -41,15 +41,6 @@
       }
 
       button.back-link { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
-      .modal-overlay {
-        position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
-        display: none; align-items: center; justify-content: center; z-index: 100; padding: 1rem;
-      }
-      .modal-dialog {
-        background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-        padding: 1.2rem; width: 100%; max-width: 26rem; max-height: 90vh; overflow-y: auto;
-        box-shadow: var(--shadow);
-      }
       .modal-mode-row { display: flex; gap: 1.2rem; margin: 0.8rem 0 1rem; }
       .modal-mode-row label { display: flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.9rem; }
       .modal-mode-row input[type="radio"] { width: auto; accent-color: var(--accent); }
@@ -67,6 +58,7 @@
 
 {% block content %}
     <div class="page-grid">
+    <div class="page-col">
     <section class="card">
       <div class="card-header">
         <h2>Rotator</h2>
@@ -120,6 +112,22 @@
 
     <section class="card">
       <div class="card-header">
+        <h2>Pass Orchestrator</h2>
+        <span class="status-pill"><span class="status-dot" id="orchestrator-dot"></span><span id="orchestrator-status"></span></span>
+      </div>
+      <p class="log-preview" id="orchestrator-last-line">&nbsp;</p>
+      <p class="hint command-line" id="orchestrator-command"></p>
+      <p class="hint" id="orchestrator-app-error" style="color: var(--danger);"></p>
+      <div class="row">
+        <button id="orchestrator-toggle-btn" class="primary" type="button" disabled>Start</button>
+        <a href="/orchestrator" class="back-link">Manage orchestrator &rarr;</a>
+      </div>
+    </section>
+    </div>
+
+    <div class="page-col">
+    <section class="card">
+      <div class="card-header">
         <h2>Sky Tracking</h2>
         <span class="status-pill"><span class="status-dot" id="tracking-dot"></span><span id="tracking-status"></span></span>
       </div>
@@ -134,20 +142,7 @@
         <tbody id="targets-body"></tbody>
       </table>
     </section>
-
-    <section class="card">
-      <div class="card-header">
-        <h2>Pass Orchestrator</h2>
-        <span class="status-pill"><span class="status-dot" id="orchestrator-dot"></span><span id="orchestrator-status"></span></span>
-      </div>
-      <p class="log-preview" id="orchestrator-last-line">&nbsp;</p>
-      <p class="hint command-line" id="orchestrator-command"></p>
-      <p class="hint" id="orchestrator-app-error" style="color: var(--danger);"></p>
-      <div class="row">
-        <button id="orchestrator-toggle-btn" class="primary" type="button" disabled>Start</button>
-        <a href="/orchestrator" class="back-link">Manage orchestrator &rarr;</a>
-      </div>
-    </section>
+    </div>
     </div>
 
     <div id="location-modal-overlay" class="modal-overlay">

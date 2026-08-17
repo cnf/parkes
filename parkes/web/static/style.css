@@ -36,18 +36,29 @@ body {
   line-height: 1.45;
 }
 
-/* Reactive like a plain auto-fit grid (collapses to 1 column on narrow
-   viewports), but capped at 2 per row -- a 3rd/5th/etc. item wraps to its
-   own row at the same column width instead of squeezing 3 across. */
+/* Two independent columns, each stacking its own cards top to bottom --
+   unlike a grid's row-major placement, a tall card in one column (Sky
+   Tracking's satellite table, say) never pushes down cards in the other
+   column, since each .page-col's height is its own. Collapses to a single
+   stacked column on narrow viewports. */
 .page-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(max(28rem, (100% - 1.5rem) / 2), 1fr));
+  display: flex;
   gap: 1.5rem;
-  align-items: start;
+  align-items: flex-start;
   margin-bottom: 1.5rem;
 }
-.page-grid > .card { margin-bottom: 0; }
-.span-full { grid-column: 1 / -1; }
+.page-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  flex: 1 1 28rem;
+  min-width: 0;
+}
+.page-col > .card { margin-bottom: 0; }
+
+@media (max-width: 60rem) {
+  .page-grid { flex-direction: column; }
+}
 
 header { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 1.75rem; }
 header .dots { display: inline-flex; gap: 0.3rem; }
@@ -156,3 +167,16 @@ tr:last-child td { border-bottom: none; }
 }
 .search-result-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.4rem 0.6rem; font-size: 0.82rem; }
 .search-result-row:hover { background: var(--bg); }
+
+.tracked-norad { color: var(--text-muted); font-weight: normal; font-size: 0.8rem; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+  display: none; align-items: center; justify-content: center; z-index: 100; padding: 1rem;
+}
+.modal-dialog {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 1.2rem; width: 100%; max-width: 26rem; max-height: 90vh; overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.modal-dialog.modal-lg { max-width: 42rem; }

@@ -4,16 +4,22 @@
   const newGroupForm = document.getElementById("new-group-form");
   const newGroupName = document.getElementById("new-group-name");
 
-  const headRow = document.getElementById("satellites-head-row");
   const body = document.getElementById("satellites-body");
   const countEl = document.getElementById("satellites-count");
   const filterInput = document.getElementById("satellites-filter");
   const sourceFilterSelect = document.getElementById("satellites-source-filter");
 
+  const modalOverlay = document.getElementById("group-modal-overlay");
+  const modalTitle = document.getElementById("group-modal-title");
+  const modalClose = document.getElementById("group-modal-close");
+  const modalMembers = document.getElementById("group-modal-members");
+  const modalSearchInput = document.getElementById("group-modal-search-input");
+  const modalSearchResults = document.getElementById("group-modal-search-results");
+
   let groups = [];
   let fixedTargets = [];
   let satellites = [];
-  let membership = new Map(); // norad -> Set(groupName)
+  let openGroupName = null;
 
   function escapeHtml(text) {
     const div = document.createElement("div");
@@ -29,19 +35,8 @@
     return res.json();
   }
 
-  function computeMembership() {
-    membership = new Map();
-    for (const group of groups) {
-      for (const sat of group.satellites) {
-        if (!membership.has(sat.norad)) membership.set(sat.norad, new Set());
-        membership.get(sat.norad).add(group.name);
-      }
-    }
-  }
-
   async function loadGroups() {
     groups = await apiFetch("/api/tracking/groups");
-    computeMembership();
   }
 
   async function loadFixedTargets() {
@@ -71,6 +66,10 @@
 
   function renderGroupsList() {
     groupsList.innerHTML = "";
+    if (groups.length === 0) {
+      groupsList.innerHTML = `<p class="hint">No groups yet -- add one below.</p>`;
+      return;
+    }
     for (const group of groups) {
       const row = document.createElement("div");
       row.className = "group-row";
@@ -79,7 +78,10 @@
           <input type="checkbox" ${group.enabled ? "checked" : ""} />
           ${escapeHtml(group.name)} <span class="count">(${group.satellites.length})</span>
         </label>
-        <button type="button" class="btn-sm">Delete</button>
+        <div class="row" style="margin: 0;">
+          <button type="button" class="btn-sm" data-action="manage">Manage</button>
+          <button type="button" class="btn-sm" data-action="delete">Delete</button>
+        </div>
       `;
       row.querySelector("input").addEventListener("change", async (event) => {
         await apiFetch(`/api/tracking/groups/${encodeURIComponent(group.name)}`, {
@@ -88,7 +90,8 @@
           body: JSON.stringify({ enabled: event.target.checked }),
         });
       });
-      row.querySelector("button").addEventListener("click", async () => {
+      row.querySelector('[data-action="manage"]').addEventListener("click", () => openGroupModal(group.name));
+      row.querySelector('[data-action="delete"]').addEventListener("click", async () => {
         await apiFetch(`/api/tracking/groups/${encodeURIComponent(group.name)}`, { method: "DELETE" });
         await refreshAll();
       });
@@ -118,47 +121,8 @@
     }
   }
 
-  function renderTableHead() {
-    headRow.innerHTML = `<th>Name</th><th>NORAD</th><th>Source</th><th>TLE age</th>`;
-    for (const group of groups) {
-      const th = document.createElement("th");
-      th.className = "group-col";
-      th.textContent = group.name;
-      headRow.appendChild(th);
-    }
-  }
-
   function ageClass(days) {
     return days > 14 ? "age-stale" : "age-fresh";
-  }
-
-  function toggleSatelliteInGroup(norad, name, groupName, checkbox) {
-    return async () => {
-      checkbox.disabled = true;
-      try {
-        if (checkbox.checked) {
-          await apiFetch(`/api/tracking/groups/${encodeURIComponent(groupName)}/satellites`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ norad, name }),
-          });
-        } else {
-          await apiFetch(`/api/tracking/groups/${encodeURIComponent(groupName)}/satellites/${norad}`, {
-            method: "DELETE",
-          });
-        }
-        // Re-render the whole table, not just the compact group list --
-        // another tab/session could have added or removed a group since
-        // this table was last drawn, and a stale set of columns would
-        // silently hide membership in groups that aren't shown yet.
-        await loadGroups();
-        renderGroupsList();
-        renderTableHead();
-        renderTableBody();
-      } finally {
-        checkbox.disabled = false;
-      }
-    };
   }
 
   function renderTableBody() {
@@ -172,17 +136,6 @@
         <td>${escapeHtml(sat.source)}</td>
         <td class="${ageClass(sat.epoch_days_old)}">${sat.epoch_days_old.toFixed(1)}d</td>
       `;
-      const memberOf = membership.get(sat.norad) || new Set();
-      for (const group of groups) {
-        const td = document.createElement("td");
-        td.className = "group-col";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = memberOf.has(group.name);
-        checkbox.addEventListener("change", toggleSatelliteInGroup(sat.norad, sat.name, group.name, checkbox));
-        td.appendChild(checkbox);
-        row.appendChild(td);
-      }
       body.appendChild(row);
     }
   }
@@ -191,9 +144,116 @@
     await Promise.all([loadGroups(), loadFixedTargets(), loadSources(), loadSatellites()]);
     renderGroupsList();
     renderFixedTargetsList();
-    renderTableHead();
     renderTableBody();
   }
+
+  // ---------------------------------------------------------------------
+  // Group modal -- add/remove satellites for whichever group is open.
+  // ---------------------------------------------------------------------
+
+  function hideModalSearchResults() {
+    modalSearchResults.style.display = "none";
+    modalSearchResults.innerHTML = "";
+  }
+
+  function currentGroup() {
+    return groups.find((g) => g.name === openGroupName) || null;
+  }
+
+  function renderModalMembers() {
+    const group = currentGroup();
+    modalMembers.innerHTML = "";
+    if (!group || group.satellites.length === 0) {
+      modalMembers.innerHTML = `<p class="hint">No satellites yet -- search below to add one.</p>`;
+      return;
+    }
+    for (const sat of group.satellites) {
+      const row = document.createElement("div");
+      row.className = "search-result-row";
+      row.innerHTML = `
+        <span>${escapeHtml(sat.name)} <span class="tracked-norad">(${sat.norad})</span></span>
+        <button type="button" class="btn-sm">Remove</button>
+      `;
+      row.querySelector("button").addEventListener("click", async () => {
+        await apiFetch(
+          `/api/tracking/groups/${encodeURIComponent(openGroupName)}/satellites/${sat.norad}`,
+          { method: "DELETE" }
+        );
+        await loadGroups();
+        renderGroupsList();
+        renderModalMembers();
+      });
+      modalMembers.appendChild(row);
+    }
+  }
+
+  function openGroupModal(groupName) {
+    openGroupName = groupName;
+    modalTitle.textContent = groupName;
+    modalSearchInput.value = "";
+    hideModalSearchResults();
+    renderModalMembers();
+    modalOverlay.style.display = "flex";
+    modalSearchInput.focus();
+  }
+
+  function closeGroupModal() {
+    modalOverlay.style.display = "none";
+    openGroupName = null;
+  }
+
+  modalClose.addEventListener("click", closeGroupModal);
+  modalOverlay.addEventListener("click", (event) => {
+    if (event.target === modalOverlay) closeGroupModal();
+  });
+
+  let modalSearchDebounce;
+  modalSearchInput.addEventListener("input", () => {
+    clearTimeout(modalSearchDebounce);
+    const q = modalSearchInput.value.trim();
+    if (!q) {
+      hideModalSearchResults();
+      return;
+    }
+    modalSearchDebounce = setTimeout(async () => {
+      const results = await apiFetch(`/api/tracking/satellites/search?q=${encodeURIComponent(q)}`);
+      const group = currentGroup();
+      const memberNorads = new Set((group ? group.satellites : []).map((s) => s.norad));
+      modalSearchResults.innerHTML = "";
+      for (const sat of results.slice(0, 20)) {
+        const row = document.createElement("div");
+        row.className = "search-result-row";
+        const already = memberNorads.has(sat.norad);
+        row.innerHTML = `
+          <span>${escapeHtml(sat.name)}</span>
+          <span style="color: var(--text-muted);">${already ? "already added" : sat.norad}</span>
+        `;
+        if (!already) {
+          row.style.cursor = "pointer";
+          row.addEventListener("click", async () => {
+            await apiFetch(`/api/tracking/groups/${encodeURIComponent(openGroupName)}/satellites`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ norad: sat.norad, name: sat.name }),
+            });
+            modalSearchInput.value = "";
+            hideModalSearchResults();
+            await loadGroups();
+            renderGroupsList();
+            renderModalMembers();
+          });
+        }
+        modalSearchResults.appendChild(row);
+      }
+      modalSearchResults.style.display = results.length ? "block" : "none";
+    }, 250);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target !== modalSearchInput && !modalSearchResults.contains(event.target)) {
+      hideModalSearchResults();
+    }
+  });
 
   newGroupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
