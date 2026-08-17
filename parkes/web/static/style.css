@@ -36,7 +36,16 @@ body {
   line-height: 1.45;
 }
 
-.page-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1.5rem; align-items: start; }
+/* Reactive like a plain auto-fit grid (collapses to 1 column on narrow
+   viewports), but capped at 2 per row -- a 3rd/5th/etc. item wraps to its
+   own row at the same column width instead of squeezing 3 across. */
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(28rem, (100% - 1.5rem) / 2), 1fr));
+  gap: 1.5rem;
+  align-items: start;
+  margin-bottom: 1.5rem;
+}
 .page-grid > .card { margin-bottom: 0; }
 .span-full { grid-column: 1 / -1; }
 
