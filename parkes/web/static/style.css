@@ -180,4 +180,12 @@ tr:last-child td { border-bottom: none; }
   padding: 1.2rem; width: 100%; max-width: 26rem; max-height: 90vh; overflow-y: auto;
   box-shadow: var(--shadow);
 }
-.modal-dialog.modal-lg { max-width: 42rem; }
+/* modal-lg's content (the group-membership modal) is already self-bounded
+   -- the member list has its own capped, independently-scrolling area --
+   so it doesn't need the outer auto-scroll. That matters because the
+   search-results dropdown below the search input is absolutely positioned
+   and overlays without pushing anything, but an `overflow-y: auto`
+   ancestor still counts its box toward its own scrollable area regardless,
+   which was flipping the dialog into a scrolling container (and jumping
+   the scroll position) the instant a search produced results. */
+.modal-dialog.modal-lg { max-width: 42rem; overflow: visible; }
