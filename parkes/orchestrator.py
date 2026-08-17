@@ -66,6 +66,7 @@ class PassOrchestrator:
         self.current_profile: str | None = None
         self.current_continuous: bool = False
         self.current_command: list[str] | None = None
+        self.current_app_error: str | None = None
 
     @property
     def running(self) -> bool:
@@ -92,6 +93,7 @@ class PassOrchestrator:
         self.current_profile = None
         self.current_continuous = False
         self.current_command = None
+        self.current_app_error = None
 
     async def _run(self) -> None:
         while True:
@@ -214,6 +216,7 @@ class PassOrchestrator:
 
         self.current_profile = profile.get("name", profile_name) if command is not None else None
         self.current_command = command
+        self.current_app_error = None
 
         # One try/finally around acquire..the wait loop so a cancelled task
         # (stop() mid-pass, or the loop below deciding to yield to a
@@ -231,8 +234,14 @@ class PassOrchestrator:
                     # take down the whole orchestrator loop -- log it and
                     # keep tracking the pass with no process running.
                     logger.warning("orchestrator: failed to launch %r: %s", profile_name, exc)
+                    self.current_app_error = f"failed to launch: {exc}"
 
             own_los = datetime.fromisoformat(pass_info["los"])
+            # Once the launched process exits, its exit is only worth
+            # reporting once -- after that, exited() would just resolve
+            # immediately on every following iteration (nothing to wait
+            # on), so stop racing it and fall back to a plain sleep.
+            watch_process = command is not None and self.current_app_error is None
             while True:
                 # `now` is captured *after* _candidate_passes(), not before --
                 # SkyTracker.next_pass() stamps a synthesized pass's "aos"
@@ -249,7 +258,20 @@ class PassOrchestrator:
                     break
                 wake_at = self._next_wake_time(current, fresh, own_los, now)
                 sleep_for = (wake_at - now).total_seconds()
-                if sleep_for > 0:
+                if sleep_for <= 0:
+                    continue
+                if watch_process:
+                    try:
+                        await asyncio.wait_for(self._app_process.exited(), timeout=sleep_for)
+                    except asyncio.TimeoutError:
+                        continue
+                    code = self._app_process.returncode
+                    logger.warning(
+                        "orchestrator: %r exited mid-pass (code %s)", profile_name, code
+                    )
+                    self.current_app_error = f"{self.current_profile} exited early (code {code})"
+                    watch_process = False
+                else:
                     await asyncio.sleep(sleep_for)
         finally:
             await self._app_process.stop()
@@ -261,6 +283,7 @@ class PassOrchestrator:
             self.current_profile = None
             self.current_continuous = False
             self.current_command = None
+            self.current_app_error = None
 
 
 def find_overlaps(sky: SkyTracker, search_hours: float = 48.0) -> list[dict]:

@@ -35,6 +35,7 @@ class StandaloneAppRunner:
         self._processes: dict[str, ManagedProcess] = {}
         self._uses_sdr: dict[str, bool] = {}
         self._last_started: dict[str, float] = {}
+        self._stopped_by_user: dict[str, bool] = {}
         self._timer_task: asyncio.Task | None = None
 
     def _process(self, name: str) -> ManagedProcess:
@@ -45,8 +46,20 @@ class StandaloneAppRunner:
     def running(self, name: str) -> bool:
         return name in self._processes and self._processes[name].running
 
-    def status(self) -> dict[str, bool]:
-        return {name: proc.running for name, proc in self._processes.items()}
+    def status(self) -> dict[str, dict]:
+        # "crashed" means it exited on its own, without stop() ever being
+        # called for this run -- a deliberate stop() (which sends SIGTERM,
+        # so returncode is often nonzero too) shouldn't read as a failure.
+        result = {}
+        for name, proc in self._processes.items():
+            if proc.running:
+                state = "running"
+            elif self._stopped_by_user.get(name, True):
+                state = "stopped"
+            else:
+                state = "crashed"
+            result[name] = {"state": state, "exit_code": proc.returncode}
+        return result
 
     async def start(self, name: str) -> None:
         profiles = load_profiles()
@@ -72,6 +85,7 @@ class StandaloneAppRunner:
             raise RuntimeError(f"failed to launch {name!r}: {exc}") from exc
         self._uses_sdr[name] = uses_sdr
         self._last_started[name] = time.monotonic()
+        self._stopped_by_user[name] = False
         if uses_sdr:
             # A one-shot profile's process can exit on its own, with
             # nobody ever calling stop() -- watch for that so the arbiter
@@ -87,6 +101,7 @@ class StandaloneAppRunner:
 
     async def stop(self, name: str) -> None:
         if name in self._processes:
+            self._stopped_by_user[name] = True
             await self._processes[name].stop()
         if self._uses_sdr.pop(name, False):
             await self._arbiter.release()

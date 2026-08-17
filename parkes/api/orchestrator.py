@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from parkes.orchestrator import PassOrchestrator, find_overlaps
 from parkes.preferences import preferences
 from parkes.sdr.app_profiles import delete_profile, load_profiles, put_profile
+from parkes.sdr.satdump_pipelines import list_live_pipelines
 from parkes.standalone_apps import StandaloneAppRunner
 from parkes.tracking.sky import SkyTracker
 from parkes.tracking.tracked_objects import (
@@ -66,6 +67,7 @@ def status(request: Request):
         "current_profile": orch.current_profile,
         "current_continuous": orch.current_continuous,
         "current_command": shlex.join(orch.current_command) if orch.current_command else None,
+        "current_app_error": orch.current_app_error,
     }
 
 
@@ -134,6 +136,11 @@ def get_overlaps(request: Request):
 @router.get("/app_profiles")
 def get_app_profiles():
     return load_profiles()
+
+
+@router.get("/satdump_pipelines")
+def get_satdump_pipelines():
+    return list_live_pipelines()
 
 
 @router.put("/app_profiles/{profile_id}")

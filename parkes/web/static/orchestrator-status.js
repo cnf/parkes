@@ -3,6 +3,7 @@
   const dotEl = document.getElementById("orchestrator-dot");
   const lineEl = document.getElementById("orchestrator-last-line");
   const commandEl = document.getElementById("orchestrator-command");
+  const appErrorEl = document.getElementById("orchestrator-app-error");
   const toggleBtn = document.getElementById("orchestrator-toggle-btn");
 
   let running = false;
@@ -33,6 +34,7 @@
         lineEl.textContent = data.status;
       }
       commandEl.textContent = data.current_command || "";
+      appErrorEl.textContent = data.current_app_error || "";
     } catch {
       // dashboard poll -- a transient failure here isn't worth surfacing
     }

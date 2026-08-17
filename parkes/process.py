@@ -20,6 +20,12 @@ class ManagedProcess:
     def running(self) -> bool:
         return self._process is not None and self._process.returncode is None
 
+    @property
+    def returncode(self) -> int | None:
+        """None while running or before anything's been started -- same
+        meaning as asyncio.subprocess.Process.returncode."""
+        return self._process.returncode if self._process is not None else None
+
     async def start(self, *args: str) -> None:
         if self.running:
             raise RuntimeError("process is already running")
@@ -44,6 +50,18 @@ class ManagedProcess:
         """
         if self._reader_task is not None:
             await self._reader_task
+
+    def exited(self) -> asyncio.Future | None:
+        """A future that resolves once the current run's process has
+        exited. Shielded, so a caller racing this against a timeout (e.g.
+        asyncio.wait_for) can let the timeout fire without cancelling the
+        underlying reader task -- an unshielded await from two places
+        (this and stop()) would otherwise have the timeout's cancellation
+        propagate into _reader_task itself. None if nothing's running.
+        """
+        if self._reader_task is None:
+            return None
+        return asyncio.shield(self._reader_task)
 
     async def stop(self) -> None:
         if self._process is None:

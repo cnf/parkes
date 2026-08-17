@@ -47,6 +47,7 @@
   const orchStopBtn = document.getElementById("orch-stop-btn");
   const orchCurrentEl = document.getElementById("orch-current");
   const orchCommandEl = document.getElementById("orch-command");
+  const orchAppErrorEl = document.getElementById("orch-app-error");
 
   async function refreshOrchStatus() {
     const status = await apiFetch("/api/orchestrator/status");
@@ -56,6 +57,7 @@
     orchStopBtn.disabled = !status.running;
     orchCurrentEl.textContent = status.current_target ? `tracking: ${status.current_target}` : " ";
     orchCommandEl.textContent = status.current_command || "";
+    orchAppErrorEl.textContent = status.current_app_error || "";
   }
 
   orchStartBtn.addEventListener("click", async () => {
@@ -94,6 +96,15 @@
   let standaloneStatus = {};
   let profilesEditIndex = null;
   let profilesEditSnapshot = null;
+  let satdumpPipelines = [];
+
+  async function loadSatdumpPipelines() {
+    try {
+      satdumpPipelines = await apiFetch("/api/orchestrator/satdump_pipelines");
+    } catch {
+      satdumpPipelines = [];
+    }
+  }
 
   function passModeProfiles() {
     return profiles.filter((p) => p.mode !== "standalone");
@@ -102,8 +113,16 @@
   function applyStandaloneStatus(row, id) {
     const statusSpan = row.querySelector('[data-role="status"]');
     if (!statusSpan) return;
-    const running = !!standaloneStatus[id];
-    statusSpan.textContent = running ? "running" : "stopped";
+    const info = standaloneStatus[id];
+    const state = info ? info.state : "stopped";
+    const running = state === "running";
+    if (state === "crashed") {
+      statusSpan.textContent = `crashed (exit ${info.exit_code})`;
+      statusSpan.style.color = "var(--danger)";
+    } else {
+      statusSpan.textContent = state;
+      statusSpan.style.color = "";
+    }
     const startBtn = row.querySelector('[data-action="start"]');
     const stopBtn = row.querySelector('[data-action="stop"]');
     if (startBtn) startBtn.disabled = running;
@@ -312,23 +331,70 @@
     );
     profilesEditView.appendChild(usesSdrLabel);
 
-    const chipList = document.createElement("div");
-    chipList.className = "chip-list";
+    // Each command arg gets its own editable row -- reorder with ↑/↓
+    // (there's no drag-and-drop; this is simpler and works on touch too),
+    // edit its text directly, or remove it. Flags (-x/--xxx) and
+    // {placeholder} tokens get a distinct color so the shape of the
+    // command is readable at a glance instead of a wall of plain text.
+    function argClass(value) {
+      if (value.startsWith("{") && value.endsWith("}")) return "command-arg-input is-placeholder";
+      if (value.startsWith("-")) return "command-arg-input is-flag";
+      return "command-arg-input";
+    }
+
+    const argsList = document.createElement("div");
+    argsList.className = "command-args-list";
     profile.command.forEach((arg, argIndex) => {
-      const chip = document.createElement("span");
-      chip.className = "chip";
-      chip.append(document.createTextNode(arg));
+      const row = document.createElement("div");
+      row.className = "command-arg-row";
+
+      const upBtn = document.createElement("button");
+      upBtn.type = "button";
+      upBtn.className = "btn-sm";
+      upBtn.textContent = "↑";
+      upBtn.title = "Move earlier";
+      upBtn.disabled = argIndex === 0;
+      upBtn.addEventListener("click", () => {
+        const c = profile.command;
+        [c[argIndex - 1], c[argIndex]] = [c[argIndex], c[argIndex - 1]];
+        renderProfileEdit();
+      });
+
+      const downBtn = document.createElement("button");
+      downBtn.type = "button";
+      downBtn.className = "btn-sm";
+      downBtn.textContent = "↓";
+      downBtn.title = "Move later";
+      downBtn.disabled = argIndex === profile.command.length - 1;
+      downBtn.addEventListener("click", () => {
+        const c = profile.command;
+        [c[argIndex + 1], c[argIndex]] = [c[argIndex], c[argIndex + 1]];
+        renderProfileEdit();
+      });
+
+      const argInput = document.createElement("input");
+      argInput.type = "text";
+      argInput.value = arg;
+      argInput.className = argClass(arg);
+      argInput.addEventListener("input", () => {
+        profile.command[argIndex] = argInput.value;
+        argInput.className = argClass(argInput.value);
+      });
+
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
+      removeBtn.className = "btn-sm";
       removeBtn.textContent = "×";
+      removeBtn.title = "Remove";
       removeBtn.addEventListener("click", () => {
         profile.command.splice(argIndex, 1);
         renderProfileEdit();
       });
-      chip.appendChild(removeBtn);
-      chipList.appendChild(chip);
+
+      row.append(upBtn, downBtn, argInput, removeBtn);
+      argsList.appendChild(row);
     });
-    profilesEditView.appendChild(chipList);
+    profilesEditView.appendChild(argsList);
 
     const searchWrap = document.createElement("div");
     searchWrap.className = "group-search";
@@ -346,6 +412,98 @@
     });
     searchWrap.appendChild(addInput);
     profilesEditView.appendChild(searchWrap);
+
+    const placeholderRow = document.createElement("div");
+    placeholderRow.className = "placeholder-quick-row";
+    placeholderRow.appendChild(document.createTextNode("Insert:"));
+    const availablePlaceholders = ["{output_dir}", "{source}", "{source_id}", "{samplerate}"];
+    if (profile.mode === "pass") availablePlaceholders.unshift("{frequency}");
+    for (const ph of availablePlaceholders) {
+      const phBtn = document.createElement("button");
+      phBtn.type = "button";
+      phBtn.className = "btn-sm";
+      phBtn.textContent = ph;
+      phBtn.addEventListener("click", () => {
+        profile.command.push(ph);
+        renderProfileEdit();
+      });
+      placeholderRow.appendChild(phBtn);
+    }
+    profilesEditView.appendChild(placeholderRow);
+
+    // Templates read straight from the installed satdump's own pipeline
+    // definitions (see api/orchestrator.py's /satdump_pipelines), so the
+    // command skeleton they produce stays accurate across satdump versions
+    // instead of us guessing at flags. Absent entirely if satdump isn't
+    // installed -- see loadSatdumpPipelines().
+    if (satdumpPipelines.length > 0) {
+      const templateWrap = document.createElement("div");
+      templateWrap.className = "group-search";
+      templateWrap.style.marginTop = "0.8rem";
+
+      const templateInput = document.createElement("input");
+      templateInput.type = "text";
+      templateInput.placeholder = "Start from a satdump pipeline... (e.g. noaa, meteor)";
+      const templateResultsEl = document.createElement("div");
+      templateResultsEl.className = "search-results";
+      templateResultsEl.style.display = "none";
+
+      templateInput.addEventListener("input", () => {
+        const q = templateInput.value.trim().toLowerCase();
+        templateResultsEl.innerHTML = "";
+        if (!q) {
+          templateResultsEl.style.display = "none";
+          return;
+        }
+        const matches = satdumpPipelines
+          .filter(
+            (p) =>
+              p.name.toLowerCase().includes(q) ||
+              p.id.toLowerCase().includes(q) ||
+              p.family.toLowerCase().includes(q)
+          )
+          .slice(0, 20);
+        for (const p of matches) {
+          const row = document.createElement("div");
+          row.className = "search-result-row";
+          row.innerHTML = `<span>${escapeHtml(p.name)} <span style="color: var(--text-muted);">(${escapeHtml(p.family)})</span></span><span style="color: var(--text-muted);">${escapeHtml(p.id)}</span>`;
+          row.addEventListener("click", () => {
+            profile.command = [
+              "satdump",
+              "live",
+              p.id,
+              "{output_dir}",
+              "--source",
+              "{source}",
+              "--samplerate",
+              "{samplerate}",
+              ...(profile.mode === "pass" ? ["--frequency", "{frequency}"] : []),
+            ];
+            profile._pipelineHint = p.frequencies.length
+              ? `Typical frequencies for ${p.name}: ` +
+                p.frequencies
+                  .slice(0, 4)
+                  .map(([label, hz]) => `${label} ${(hz / 1e6).toFixed(3)} MHz`)
+                  .join(", ")
+              : null;
+            renderProfileEdit();
+          });
+          templateResultsEl.appendChild(row);
+        }
+        templateResultsEl.style.display = matches.length ? "block" : "none";
+      });
+
+      templateWrap.append(templateInput, templateResultsEl);
+      profilesEditView.appendChild(templateWrap);
+
+      if (profile._pipelineHint) {
+        const hintP = document.createElement("p");
+        hintP.className = "hint";
+        hintP.style.marginTop = "0.4rem";
+        hintP.textContent = profile._pipelineHint;
+        profilesEditView.appendChild(hintP);
+      }
+    }
 
     if (profile.mode === "standalone") {
       const scheduleRow = document.createElement("div");
@@ -846,7 +1004,7 @@
   // ---------------------------------------------------------------------
 
   async function init() {
-    await Promise.all([loadProfiles(), loadObjects(), loadOverlaps()]);
+    await Promise.all([loadProfiles(), loadObjects(), loadOverlaps(), loadSatdumpPipelines()]);
     renderProfilesList();
     renderTrackedList();
     await refreshStandaloneStatus();

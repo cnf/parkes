@@ -20,6 +20,14 @@
       .profile-standalone-status { font-size: 0.8rem; color: var(--text-muted); }
 
       .edit-name-input { font-size: 1rem; padding: 0.35rem 0.5rem; margin: 0.6rem 0; width: 100%; max-width: 20rem; }
+
+      .command-args-list { margin-bottom: 0.6rem; }
+      .command-arg-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem; }
+      .command-arg-row input[type="text"] { flex: 1; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.85rem; }
+      .command-arg-input.is-flag { color: var(--accent2); font-weight: 600; }
+      .command-arg-input.is-placeholder { color: var(--accent); font-weight: 600; }
+      .placeholder-quick-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem; }
+      .placeholder-quick-row button { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; }
       .table-scroll { overflow-x: auto; }
       table td { vertical-align: middle; }
       table td.actions-col { white-space: nowrap; text-align: right; }
@@ -51,6 +59,7 @@
       </div>
       <p class="hint" id="orch-current">&nbsp;</p>
       <p class="hint command-line" id="orch-command"></p>
+      <p class="hint" id="orch-app-error" style="color: var(--danger);"></p>
     </section>
 
     <section class="card">
