@@ -32,7 +32,9 @@ This starts the web app at `http://localhost:8000` (uvicorn, auto-reloading) alo
 
 ### Optional packages
 
-- rtl-sdR
+- rtl-sdr
+- hackrf
+- ...
 
 ## Configuration
 
@@ -43,19 +45,10 @@ Two layers, deliberately kept separate:
 
 See [docs/deploy.md](docs/deploy.md) for running on the actual Pi (systemd unit, permissions) rather than under devenv.
 
-## Linting
+## Screenshots
 
-```bash
-ruff check .
-ruff format .
-```
-
-## Layout
-
-```
-parkes/       FastAPI app, rotator/tracking/SDR orchestration
-parkes/web/   Jinja2 templates + static JS/CSS (no build step)
-parkes/api/   HTTP routes
-docs/         Deployment docs + example systemd unit
-data/         Runtime state (preferences, TLE cache, tracked objects...) -- gitignored
-```
+![dashboard](docs/dashboard.png)
+![satellites](docs/satellites.png)
+![orchestrator](docs/orchestrator.png)
+![sdr](docs/sdr.png)
+![settings](docs/settings.png)

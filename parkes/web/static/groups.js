@@ -80,6 +80,7 @@
         </label>
         <div class="row" style="margin: 0;">
           <button type="button" class="btn-sm" data-action="manage">Manage</button>
+          <button type="button" class="btn-sm" data-action="rename">Rename</button>
           <button type="button" class="btn-sm" data-action="delete">Delete</button>
         </div>
       `;
@@ -91,6 +92,21 @@
         });
       });
       row.querySelector('[data-action="manage"]').addEventListener("click", () => openGroupModal(group.name));
+      row.querySelector('[data-action="rename"]').addEventListener("click", async () => {
+        const name = prompt("Rename group to:", group.name);
+        if (!name || !name.trim() || name.trim() === group.name) return;
+        try {
+          await apiFetch(`/api/tracking/groups/${encodeURIComponent(group.name)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name.trim() }),
+          });
+        } catch (err) {
+          alert(`Rename failed: ${err.message}`);
+          return;
+        }
+        await refreshAll();
+      });
       row.querySelector('[data-action="delete"]').addEventListener("click", async () => {
         await apiFetch(`/api/tracking/groups/${encodeURIComponent(group.name)}`, { method: "DELETE" });
         await refreshAll();

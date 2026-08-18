@@ -26,6 +26,11 @@ class SetEnabledRequest(BaseModel):
     enabled: bool
 
 
+class UpdateGroupRequest(BaseModel):
+    enabled: bool | None = None
+    name: str | None = None
+
+
 class AddSatelliteRequest(BaseModel):
     norad: int
     name: str
@@ -176,11 +181,17 @@ def delete_group(group_name: str, request: Request):
 
 
 @router.patch("/groups/{group_name}")
-def set_group_enabled(group_name: str, body: SetEnabledRequest, request: Request):
+def update_group(group_name: str, body: UpdateGroupRequest, request: Request):
     try:
-        _groups(request).set_enabled(group_name, body.enabled)
+        if body.name is not None and body.name != group_name:
+            _groups(request).rename_group(group_name, body.name)
+            group_name = body.name
+        if body.enabled is not None:
+            _groups(request).set_enabled(group_name, body.enabled)
     except KeyError as exc:
         raise HTTPException(404, f"unknown group: {group_name}") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
     return {"status": "ok"}
 
 

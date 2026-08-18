@@ -42,6 +42,17 @@ class GroupStore:
         if data.pop(name, None) is not None:
             _save(data)
 
+    def rename_group(self, old_name: str, new_name: str) -> None:
+        data = _load()
+        if old_name not in data:
+            raise KeyError(old_name)
+        if new_name != old_name and new_name in data:
+            raise ValueError(f"group already exists: {new_name}")
+        # Rebuild rather than pop+reinsert, so the renamed group keeps its
+        # position in the list instead of jumping to the end.
+        data = {new_name if k == old_name else k: v for k, v in data.items()}
+        _save(data)
+
     def set_enabled(self, name: str, enabled: bool) -> None:
         data = _load()
         if name not in data:
