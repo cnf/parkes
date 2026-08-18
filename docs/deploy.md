@@ -9,25 +9,14 @@ GPS-based time sync) may legitimately want to share that same daemon.
 Because of this, one systemd unit is enough — it replaces the need for a
 separate `rotctld.service`, but deliberately not `gpsd.service`.
 
-## `/etc/systemd/system/parkes-web.service`
+## `/etc/systemd/system/parkes.service`
 
-```ini
-[Unit]
-Description=Parkes
-After=network-online.target gpsd.service
-Wants=network-online.target gpsd.service
+See [parkes.service](parkes.service) for a copy-pasteable unit file.
 
-[Service]
-User=parkes
-WorkingDirectory=/opt/parkes
-ExecStart=/opt/parkes/.venv/bin/uvicorn parkes.main:app --host 0.0.0.0 --port 8000
-Restart=on-failure
-RestartSec=5
-KillMode=control-group
-EnvironmentFile=-/etc/parkes/parkes.env
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo cp docs/parkes.service /etc/systemd/system/parkes.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now parkes.service
 ```
 
 `KillMode=control-group` means stopping/restarting this unit also stops the
@@ -77,7 +66,7 @@ that's not a well-defined destination for a TCP client to connect to.
 
 ## Permissions
 
-The user running `parkes-web.service` (`parkes` above) needs read/write
+The user running `parkes.service` (`parkes` above) needs read/write
 access to whatever serial device the rotator/gpsd Settings-page fields
 point at — on Raspberry Pi OS, that means being a member of the `dialout`
 group:

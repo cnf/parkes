@@ -73,7 +73,7 @@ class InfraDaemon:
             _, writer = await asyncio.wait_for(
                 asyncio.open_connection(probe_host, self._port), timeout=1
             )
-        except (OSError, asyncio.TimeoutError):
+        except (TimeoutError, OSError):
             return False
         writer.close()
         await writer.wait_closed()
@@ -140,7 +140,8 @@ class InfraSupervisor:
         self.daemons = {}
         if prefs["rotctld_managed"]:
             self.daemons["rotctld"] = InfraDaemon(
-                "rotctld", _rotctld_command(prefs), prefs["rotctld_bind_host"], prefs["rotctld_port"]
+                "rotctld", _rotctld_command(prefs),
+                prefs["rotctld_bind_host"], prefs["rotctld_port"],
             )
         if prefs["gpsd_managed"]:
             self.daemons["gpsd"] = InfraDaemon(

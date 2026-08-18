@@ -10,6 +10,7 @@
     hackrf
     gpsd
     socat
+    ruff
   ];
 
   languages.python = {

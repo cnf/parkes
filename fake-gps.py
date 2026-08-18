@@ -2,9 +2,9 @@
 
 import os
 import pty
-import time
-import subprocess
 import signal
+import subprocess
+import time
 
 LAT = "5230.704"
 LAT_HEMI = "N"

@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from skyfield.api import EarthSatellite, Loader
@@ -79,7 +79,7 @@ class TleCatalog:
         so it doubles as a quick way to browse a whole source without the
         separate source dropdown."""
         query = query.strip().lower()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         results = []
         for sat in self._by_norad.values():
             sat_source = self._source_by_norad.get(sat.model.satnum, "")

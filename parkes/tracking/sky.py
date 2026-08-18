@@ -1,7 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
 
-from skyfield.api import EarthSatellite, Loader, Star, wgs84
+from skyfield.api import Loader, Star, wgs84
 
 from parkes.config import settings
 from parkes.preferences import preferences
@@ -76,13 +76,13 @@ class SkyTracker:
                 "manual",
             )
         if mode == "gpsd" and self._gpsd is not None and self._gpsd.has_fresh_fix:
-            return (
-                self._gpsd.lat,
-                self._gpsd.lon,
-                self._gpsd.altitude_m if self._gpsd.altitude_m is not None else prefs["observer_elevation_m"],
-                "gpsd",
-            )
-        return (prefs["observer_lat"], prefs["observer_lon"], prefs["observer_elevation_m"], "default")
+            elevation = self._gpsd.altitude_m
+            if elevation is None:
+                elevation = prefs["observer_elevation_m"]
+            return (self._gpsd.lat, self._gpsd.lon, elevation, "gpsd")
+        return (
+            prefs["observer_lat"], prefs["observer_lon"], prefs["observer_elevation_m"], "default"
+        )
 
     def _current_topos(self):
         lat, lon, elevation, _source = self.current_location()
@@ -221,7 +221,7 @@ class SkyTracker:
         if current_el.degrees >= min_elevation:
             set_time = None
             max_elevation = current_el.degrees
-            for time, event in zip(times, events):
+            for time, event in zip(times, events, strict=True):
                 if event == 1:
                     el, _az, _dist = (satellite - topos).at(time).altaz()
                     max_elevation = max(max_elevation, float(el.degrees))

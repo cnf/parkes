@@ -1,0 +1,24 @@
+# Example systemd unit for running Parkes on the Pi. See docs/deploy.md for
+# the full explanation (why one unit is enough, the KillMode tradeoff,
+# permissions). Copy to /etc/systemd/system/parkes.service, adjust
+# User/WorkingDirectory/ExecStart for your install, then:
+#
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now parkes.service
+
+[Unit]
+Description=Parkes
+After=network-online.target gpsd.service
+Wants=network-online.target gpsd.service
+
+[Service]
+User=parkes
+WorkingDirectory=/opt/parkes
+ExecStart=/opt/parkes/.venv/bin/uvicorn parkes.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+EnvironmentFile=-/etc/parkes/parkes.env
+
+[Install]
+WantedBy=multi-user.target

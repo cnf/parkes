@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from parkes.config import settings
@@ -101,7 +101,7 @@ def resolve_command(command: list[str], **overrides) -> list[str]:
         "source": prefs["satdump_sdr_source"],
         "source_id": prefs["satdump_sdr_source_id"] or "",
         "samplerate": prefs["satdump_samplerate"],
-        "timestamp": datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"),
+        "timestamp": datetime.now(UTC).strftime("%Y%m%d_%H%M%S"),
         **overrides,
     }
     return [part.format(**values) for part in command]

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from parkes.preferences import preferences
 from parkes.process import ManagedProcess
@@ -110,7 +110,7 @@ class PassOrchestrator:
 
             next_up = min(candidates, key=lambda c: c[3]["aos"])
             wait_seconds = (
-                datetime.fromisoformat(next_up[3]["aos"]) - datetime.now(timezone.utc)
+                datetime.fromisoformat(next_up[3]["aos"]) - datetime.now(UTC)
             ).total_seconds()
             if wait_seconds > _POLL_SECONDS:
                 self.status = f"next: {next_up[1]} in {int(wait_seconds / 60)}m"
@@ -157,7 +157,7 @@ class PassOrchestrator:
         return (bool(pass_info.get("unbounded")), priority)
 
     def _best_available_now(self, candidates: list[_Candidate]) -> _Candidate | None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         available = [c for c in candidates if datetime.fromisoformat(c[3]["aos"]) <= now]
         return min(available, key=self._rank) if available else None
 
@@ -265,7 +265,7 @@ class PassOrchestrator:
                 # microseconds in the future, so "aos <= now" would never
                 # match and preemption would never trigger.
                 fresh = self._candidate_passes()
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 if now >= own_los:
                     break
                 if self._outranked(current, fresh, now):
@@ -277,7 +277,7 @@ class PassOrchestrator:
                 if watch_process:
                     try:
                         await asyncio.wait_for(self._app_process.exited(), timeout=sleep_for)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
                     code = self._app_process.returncode
                     logger.warning(
@@ -314,7 +314,9 @@ def find_overlaps(sky: SkyTracker, search_hours: float = 48.0) -> list[dict]:
             continue
         target_id = f"sat:{obj['norad']}"
         try:
-            for p in sky.passes_in_window(target_id, min_elevation=min_elevation, search_hours=search_hours):
+            for p in sky.passes_in_window(
+                target_id, min_elevation=min_elevation, search_hours=search_hours
+            ):
                 passes.append({"target_id": target_id, "name": obj["name"], **p})
         except KeyError:
             continue

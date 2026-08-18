@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from parkes.config import settings
@@ -26,14 +26,14 @@ def _save(data: dict) -> None:
 
 
 def _entry(value: list) -> dict:
-    return {"data": value, "fetched_at": datetime.now(timezone.utc).isoformat()}
+    return {"data": value, "fetched_at": datetime.now(UTC).isoformat()}
 
 
 def is_fresh(entry: dict | None, max_age_hours: float) -> bool:
     if entry is None:
         return False
     fetched_at = datetime.fromisoformat(entry["fetched_at"])
-    age_hours = (datetime.now(timezone.utc) - fetched_at).total_seconds() / 3600
+    age_hours = (datetime.now(UTC) - fetched_at).total_seconds() / 3600
     return age_hours < max_age_hours
 
 

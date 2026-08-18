@@ -43,7 +43,10 @@ class GpsdClient:
 
     @property
     def has_fresh_fix(self) -> bool:
-        return self._fix_time is not None and (time.monotonic() - self._fix_time) < _FIX_STALE_SECONDS
+        return (
+            self._fix_time is not None
+            and (time.monotonic() - self._fix_time) < _FIX_STALE_SECONDS
+        )
 
     def start(self) -> None:
         if self._task is None:

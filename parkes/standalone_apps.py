@@ -85,7 +85,9 @@ class StandaloneAppRunner:
             # {placeholder}, not an unknown profile. Re-raise as ValueError
             # so it doesn't get mistaken for one by this method's own
             # callers (see api/orchestrator.py's standalone_start()).
-            raise ValueError(f"{name!r}'s command references {{{exc.args[0]}}}, which has no value here") from exc
+            raise ValueError(
+                f"{name!r}'s command references {{{exc.args[0]}}}, which has no value here"
+            ) from exc
         uses_sdr = profiles[name].get("uses_sdr", True)
         if uses_sdr:
             await self._arbiter.acquire()

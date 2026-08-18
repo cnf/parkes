@@ -297,7 +297,9 @@ def get_static_positions(request: Request):
 
 
 @router.put("/static_positions/{position_id}")
-def put_static_position_route(position_id: str, body: UpsertStaticPositionRequest, request: Request):
+def put_static_position_route(
+    position_id: str, body: UpsertStaticPositionRequest, request: Request
+):
     if body.position_mode == "latlon":
         if body.lat is None or body.lon is None:
             raise HTTPException(422, "lat/lon are required in latlon mode")
