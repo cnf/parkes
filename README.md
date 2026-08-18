@@ -20,6 +20,20 @@ devenv up
 
 This starts the web app at `http://localhost:8000` (uvicorn, auto-reloading) alongside a fake GPS source. Rotator hardware defaults to Hamlib's dummy backend (`rotator_model=1`) so the UI works with nothing physically attached -- see [Configuration](#configuration) below for pointing it at a real EasyCommII controller.
 
+
+## Install
+
+### Packages
+
+- libhamlib-tools
+- soapysdr-module-all
+- satdump
+- gpsd
+
+### Optional packages
+
+- rtl-sdR
+
 ## Configuration
 
 Two layers, deliberately kept separate:
