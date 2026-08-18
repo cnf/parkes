@@ -61,9 +61,69 @@
 
     <section class="card">
       <div class="card-header">
+        <h2>Rotator (rotctld)</h2>
+        <span class="status-pill"><span class="status-dot" id="rotator-mgmt-dot"></span><span id="rotator-mgmt-status"></span></span>
+      </div>
+      <p class="hint">
+        Parkes starts and supervises rotctld itself when "Managed" is on. Model list comes from
+        <code>rotctl -l</code> on this machine's Hamlib install. "Host" is always where <em>this
+        app</em> connects; "Bind address" only matters when Managed is on -- it's what interface
+        the daemon Parkes spawns listens on. Set it to <code>0.0.0.0</code> to let other rotctld
+        clients (e.g. gpredict on a laptop) reach it over the LAN while Host stays
+        <code>localhost</code> for Parkes's own connection.
+      </p>
+      <form id="rotator-form">
+        <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; margin-bottom: 0.6rem;">
+          <input name="rotctld_managed" type="checkbox" style="width: auto; accent-color: var(--accent);" />
+          Managed by Parkes
+        </label>
+        <div class="settings-grid">
+          <label>Host (connect) <input name="rotctld_host" type="text" /></label>
+          <label>Port <input name="rotctld_port" type="number" step="1" min="1" /></label>
+          <label id="rotator-bind-row">Bind address <input name="rotctld_bind_host" type="text" /></label>
+          <label>Model <select name="rotator_model"></select></label>
+          <label>Serial device <input name="rotator_device" type="text" placeholder="/dev/ttyACM0" /></label>
+          <label>Read timeout (ms) <input name="rotctld_timeout_ms" type="number" step="1" min="1" placeholder="device default" /></label>
+          <label>Retries <input name="rotctld_retry" type="number" step="1" min="0" placeholder="device default" /></label>
+        </div>
+        <button type="submit" class="primary" style="margin-top: 0.8rem;">Save rotator settings</button>
+        <span id="rotator-form-status" style="color: var(--text-muted); font-size: 0.85rem; margin-left: 0.6rem;"></span>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>GPS (gpsd)</h2>
+        <span class="status-pill"><span class="status-dot" id="gpsd-mgmt-dot"></span><span id="gpsd-mgmt-status"></span></span>
+      </div>
+      <p class="hint">
+        Off by default -- most setups rely on the system's own gpsd.service, which other things
+        (like chrony) may also use. Only turn "Managed" on for a Pi where Parkes is the sole gpsd
+        consumer. "Host" is always where <em>this app</em> connects; "Bind address" only matters
+        when Managed is on (anything other than <code>localhost</code> tells gpsd to listen on
+        all interfaces, not just loopback).
+      </p>
+      <form id="gpsd-form">
+        <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; margin-bottom: 0.6rem;">
+          <input name="gpsd_managed" type="checkbox" style="width: auto; accent-color: var(--accent);" />
+          Managed by Parkes
+        </label>
+        <div class="settings-grid">
+          <label>Host (connect) <input name="gpsd_host" type="text" /></label>
+          <label>Port <input name="gpsd_port" type="number" step="1" min="1" /></label>
+          <label id="gpsd-bind-row">Bind address <input name="gpsd_bind_host" type="text" /></label>
+          <label>Serial device <input name="gpsd_device" type="text" placeholder="/dev/ttyUSB0" /></label>
+        </div>
+        <button type="submit" class="primary" style="margin-top: 0.8rem;">Save GPS settings</button>
+        <span id="gpsd-form-status" style="color: var(--text-muted); font-size: 0.85rem; margin-left: 0.6rem;"></span>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
         <h2>Connection &amp; Paths</h2>
       </div>
-      <p class="hint">Set via environment variables / devenv.nix -- changing these needs a restart.</p>
+      <p class="hint">Binary/data-path config -- set via environment variables / devenv.nix, changing these needs a restart.</p>
       <div id="infra-list"></div>
     </section>
 

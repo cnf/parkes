@@ -5,3 +5,6 @@ __pycache__/
 .env
 /data/
 .claude/
+*.egg-info/
+/dist/
+/build/

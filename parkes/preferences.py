@@ -5,10 +5,14 @@ from typing import Any
 from parkes.config import settings
 
 # User-editable operating preferences -- observer location, tracking
-# cadence, satdump/SDR parameters. Deliberately excludes infrastructure
-# config (rotctld host/port, data directories, file paths) that's tied to
-# a live connection or the filesystem layout; those stay in Settings,
-# set via devenv.nix/.env, and require a restart to change.
+# cadence, satdump/SDR parameters, and everything about the rotctld/gpsd
+# connection: which process InfraSupervisor runs (if any) and where to
+# reach it, whether Parkes owns it or not. Deliberately excludes config
+# that's tied to the filesystem layout or a deploy-time binary choice
+# (rotctld/gpsd binary paths, data directories) -- those stay in Settings,
+# set via devenv.nix/.env, and require a restart to change. Everything
+# else is meant to be changed at runtime through the UI, not by editing
+# environment variables.
 DEFAULTS: dict[str, Any] = {
     "observer_lat": settings.observer_lat,
     "observer_lon": settings.observer_lon,
@@ -32,6 +36,36 @@ DEFAULTS: dict[str, Any] = {
     # local "uses_sdr" app profile is active, stopping it right before one
     # launches and restarting it once the last one finishes.
     "soapy_remote_auto": False,
+    # rotctld connection + what InfraSupervisor launches there (see
+    # infra_supervisor.py). rotctld_host/port are always where RotctldClient
+    # connects. rotctld_bind_host is a *separate* concern, only meaningful
+    # when rotctld_managed is on: what interface the daemon Parkes spawns
+    # listens on (-T). These are deliberately not the same field -- e.g.
+    # binding 0.0.0.0 so a laptop's gpredict can reach rotctld over the LAN
+    # (a documented side-benefit of rotctld being a standard network bridge)
+    # while Parkes's own client still connects via localhost, since
+    # connecting *to* 0.0.0.0 isn't a well-defined client target. When
+    # rotctld_managed is off, rotctld_bind_host is unused. rotator_model is
+    # Hamlib's numeric rotator id (1 = dummy, 202 = EasyCommII, or any other
+    # `rotctld --list`-supported model), not just a dummy/real toggle.
+    # rotctld_timeout_ms/rotctld_retry are opt-in tuning for devices with
+    # slow/flaky replies, not a default for every rotator.
+    "rotctld_host": settings.rotctld_host,
+    "rotctld_port": settings.rotctld_port,
+    "rotctld_bind_host": settings.rotctld_bind_host,
+    "rotctld_managed": settings.rotctld_managed,
+    "rotator_model": settings.rotator_model,
+    "rotator_device": settings.rotator_device,
+    "rotctld_timeout_ms": settings.rotctld_timeout_ms,
+    "rotctld_retry": settings.rotctld_retry,
+    # Same idea for gpsd. Managed off by default -- most setups rely on the
+    # system's own gpsd.service, which other things (e.g. chronyd) may also
+    # use. See infra_supervisor.py.
+    "gpsd_host": settings.gpsd_host,
+    "gpsd_port": settings.gpsd_port,
+    "gpsd_bind_host": settings.gpsd_bind_host,
+    "gpsd_managed": settings.gpsd_managed,
+    "gpsd_device": settings.gpsd_device,
 }
 
 

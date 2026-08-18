@@ -29,6 +29,19 @@ class RotctldClient:
                 self._host, self._port
             )
 
+    def reconfigure(self, host: str, port: int) -> None:
+        """Points this client at a different rotctld -- e.g. after a
+        Settings page save changes rotctld_host/port. Just drops the
+        current connection; _ensure_connected() reconnects lazily on the
+        next command, same as it does after any other disconnect."""
+        if (host, port) == (self._host, self._port):
+            return
+        self._host, self._port = host, port
+        if self._writer is not None:
+            self._writer.close()
+        self._reader = None
+        self._writer = None
+
     async def _send(self, command: str) -> None:
         await self._ensure_connected()
         self._writer.write(f"{command}\n".encode())

@@ -6,9 +6,29 @@ class Settings(BaseSettings):
 
     app_name: str = "Parkes"
 
-    # rotctld (Hamlib) bridges this app to the EasyCommII serial hardware.
+    # rotctld (Hamlib) bridges this app to the EasyCommII serial hardware --
+    # host/port, model, managed on/off, etc. are all fresh-deploy starting
+    # points only (see preferences.py's DEFAULTS docstring): once the app
+    # has run once, the UI-saved value in preferences_file (Settings page)
+    # wins, so there's no need to touch these again after initial setup.
+    # Only the binary path stays env-only for good -- that's a deploy-time
+    # concern (which rotctld build/install to run), not something you'd
+    # ever want to flip at runtime.
+    rotctld_bin: str = "rotctld"
+    rotctl_bin: str = "rotctl"  # the client CLI, used only to list supported models (`-l`)
     rotctld_host: str = "localhost"
     rotctld_port: int = 4533
+    # What the managed daemon binds to (-T) -- a separate concern from
+    # rotctld_host above, which is what Parkes *connects* to. Only used
+    # when rotctld_managed is on. Defaults the same as rotctld_host, so
+    # nothing changes until this is deliberately set wider (e.g. 0.0.0.0
+    # to let other rotctld clients like gpredict reach it over the LAN).
+    rotctld_bind_host: str = "localhost"
+    rotctld_managed: bool = True
+    rotator_model: int = 1
+    rotator_device: str | None = None
+    rotctld_timeout_ms: int | None = None
+    rotctld_retry: int | None = None
 
     # Observer location, used for az/el tracking math. Defaults to Antwerp,
     # Belgium -- the fallback used when observer_location_mode isn't
@@ -19,9 +39,20 @@ class Settings(BaseSettings):
 
     # gpsd (or gpsfake, for testing -- same wire protocol) that
     # observer_location_mode "gpsd" reads a live fix from. See
-    # tracking/gpsd_client.py.
+    # tracking/gpsd_client.py. Fresh-deploy defaults only, same as rotctld
+    # above -- host/port/managed/device all move to preferences_file once
+    # the app has run once. Off by default, since Raspberry Pi OS already
+    # ships a working gpsd.service with udev device autodetection, and
+    # other things (e.g. chronyd, via SHM) may legitimately want to share
+    # that same daemon -- Parkes just connects, as GpsdClient already does
+    # today. Only turn this on for a single-purpose Pi with nothing else
+    # consuming gpsd.
+    gpsd_bin: str = "gpsd"
     gpsd_host: str = "localhost"
     gpsd_port: int = 2947
+    gpsd_bind_host: str = "localhost"  # see rotctld_bind_host above
+    gpsd_managed: bool = False
+    gpsd_device: str | None = None
 
     # Where skyfield caches its downloaded ephemeris/timescale data.
     skyfield_data_dir: str = "data/skyfield"

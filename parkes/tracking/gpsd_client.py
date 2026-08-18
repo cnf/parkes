@@ -56,6 +56,19 @@ class GpsdClient:
                 await self._task
             self._task = None
 
+    async def reconfigure(self, host: str, port: int) -> None:
+        """Points this client at a different gpsd -- e.g. after a Settings
+        page save changes gpsd_host/port. Drops the current fix, since it
+        came from the old source, and restarts the connect/listen loop
+        against the new address."""
+        if (host, port) == (self._host, self._port):
+            return
+        await self.stop()
+        self._host, self._port = host, port
+        self.lat = self.lon = self.altitude_m = None
+        self._fix_time = None
+        self.start()
+
     async def _run(self) -> None:
         while True:
             try:

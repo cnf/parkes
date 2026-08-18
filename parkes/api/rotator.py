@@ -1,14 +1,47 @@
 import asyncio
 import contextlib
+import functools
+import re
+import subprocess
 import time
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from parkes.config import settings
 from parkes.rotator.rotctld_client import RotctldClient, RotctldError
 
 router = APIRouter(prefix="/api/rotator", tags=["rotator"])
+
+_MODEL_LIST_SPLIT_RE = re.compile(r"\s{2,}")
+
+
+@functools.lru_cache(maxsize=1)
+def _list_models() -> list[dict]:
+    # `rotctl -l` (the client CLI, not rotctld) prints Hamlib's whole
+    # rotator catalog as a fixed-width table -- parsed once and cached
+    # since it's static for the life of this process (comes from whatever
+    # hamlib build is installed, not from any state Parkes tracks).
+    try:
+        result = subprocess.run(
+            [settings.rotctl_bin, "-l"], capture_output=True, text=True, timeout=5
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    models = []
+    for line in result.stdout.splitlines()[1:]:  # skip the "Rot # Mfg ..." header
+        parts = _MODEL_LIST_SPLIT_RE.split(line.strip())
+        if len(parts) < 3 or not parts[0].isdigit():
+            continue
+        rot_id, mfg, model = int(parts[0]), parts[1], parts[2]
+        models.append({"id": rot_id, "mfg": mfg, "model": model})
+    return models
+
+
+@router.get("/models")
+def list_models():
+    return _list_models()
 
 
 class GotoRequest(BaseModel):

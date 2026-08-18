@@ -27,9 +27,12 @@ from parkes.api.rotator import router as rotator_router
 from parkes.api.satnogs import router as satnogs_router
 from parkes.api.sdr import router as sdr_router
 from parkes.api.settings import router as settings_router
+from parkes.api.status import router as status_router
 from parkes.api.tracking import router as tracking_router
 from parkes.config import settings
+from parkes.infra_supervisor import InfraSupervisor
 from parkes.orchestrator import PassOrchestrator
+from parkes.preferences import preferences
 from parkes.rotator.rotctld_client import RotctldClient
 from parkes.satnogs.service import SatnogsService
 from parkes.sdr.arbiter import SdrArbiter
@@ -57,7 +60,16 @@ async def _load_tles_in_background(tle_catalog: TleCatalog) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.rotator = RotctldClient(settings.rotctld_host, settings.rotctld_port)
+    # Owns rotctld (and, if enabled, gpsd) as always-on child processes for
+    # this app's whole runtime -- started before, and stopped after, the
+    # clients that talk to them. See infra_supervisor.py.
+    app.state.infra = InfraSupervisor()
+    await app.state.infra.start()
+    # host/port come from preferences, not settings directly -- they're
+    # user-editable on the Settings page and can change without a restart
+    # (see RotctldClient.reconfigure(), called from api/settings.py).
+    prefs = preferences.get_all()
+    app.state.rotator = RotctldClient(prefs["rotctld_host"], prefs["rotctld_port"])
     app.state.tle_sources = TleSourceStore()
     app.state.tle_catalog = TleCatalog(app.state.tle_sources)
     # Fetches multiple TLE sets over the network -- run in the background so
@@ -69,7 +81,7 @@ async def lifespan(app: FastAPI):
     # listening -- same "not always connected" tolerance as the rest of
     # this app's hardware integrations (rotctld, SDR). Only consulted when
     # observer_location_mode is actually "gpsd" (see SkyTracker).
-    app.state.gpsd = GpsdClient(settings.gpsd_host, settings.gpsd_port)
+    app.state.gpsd = GpsdClient(prefs["gpsd_host"], prefs["gpsd_port"])
     app.state.gpsd.start()
     app.state.sky = SkyTracker(
         app.state.tle_catalog, app.state.group_store, app.state.fixed_target_store, app.state.gpsd
@@ -92,6 +104,7 @@ async def lifespan(app: FastAPI):
     await app.state.standalone_apps.stop_timer()
     await app.state.rotator.close()
     await app.state.gpsd.stop()
+    await app.state.infra.stop()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -101,6 +114,7 @@ app.include_router(sdr_router)
 app.include_router(orchestrator_router)
 app.include_router(satnogs_router)
 app.include_router(settings_router)
+app.include_router(status_router)
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
 
