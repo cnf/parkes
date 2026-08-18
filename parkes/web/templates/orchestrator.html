@@ -4,15 +4,37 @@
 
 {% block styles %}
     <style>
-      .downlink-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
-      .downlink-row .downlink-enabled { width: 1.2rem; flex: 0 0 auto; accent-color: var(--accent); }
-      .downlink-row .downlink-freq { width: 9rem; }
-      .downlink-row .downlink-desc { flex: 1 1 10rem; min-width: 8rem; }
-      .downlink-row .downlink-mode { width: 6rem; }
-      .downlink-row .downlink-baud { width: 6rem; }
-      .downlink-row select { width: 11rem; }
-      .downlink-row .downlink-satnogs-link { flex: 0 0 auto; text-decoration: none; }
-      .downlink-row-head span { flex: 0 0 auto; }
+      .downlink-block { margin-bottom: 0.8rem; }
+      .downlink-block-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.7rem; }
+      .downlink-enabled-label { display: flex; flex-direction: row; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 600; color: var(--text); }
+      .downlink-enabled-label input { width: auto; accent-color: var(--accent); }
+      .downlink-block-top .row { margin: 0; }
+      .downlink-satnogs-link { text-decoration: none; }
+
+      .freq-field-row { display: flex; align-items: flex-end; gap: 0.6rem; margin-bottom: 0.7rem; flex-wrap: wrap; }
+      .freq-input-wrap { display: flex; align-items: center; gap: 0.5rem; }
+      .freq-field-row .downlink-freq { width: 9rem; }
+
+      /* Sizing goes on the label wrapper, not the input -- the label is a
+         column flex container (text stacked over field), so a `flex` or
+         `width` on the input itself would resolve against that column's
+         own box, not the details row it visually sits in. */
+      .downlink-details-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+      .downlink-desc-field { flex: 1 1 10rem; min-width: 8rem; }
+      .downlink-mode-field { width: 6rem; }
+      .downlink-baud-field { width: 6rem; }
+      .downlink-app-field { width: 11rem; }
+      .downlink-desc-field input,
+      .downlink-mode-field input,
+      .downlink-baud-field input,
+      .downlink-app-field select { width: 100%; }
+
+      .band-lookup-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+      .band-lookup-row input[type="number"] { width: 9rem; }
+      .band-lookup-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+      .band-lookup-chips button { font-size: 0.78rem; padding: 0.25rem 0.6rem; }
+      .band-reference-table { font-size: 0.8rem; color: var(--text-muted); line-height: 1.9; border-top: 1px solid var(--border); padding-top: 0.7rem; }
+      .band-reference-table .freq-badge { margin-right: 0.5rem; min-width: 3.5rem; text-align: center; }
 
       .profile-mode-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
       .profile-mode-row label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; font-weight: normal; }
@@ -182,6 +204,23 @@
       </div>
 
       <div id="profiles-edit-view" style="display: none;"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Band Reference</h2>
+      </div>
+      <p class="hint">
+        Quick lookup for what a frequency falls under -- the same band detection shown next to
+        every frequency field above.
+      </p>
+      <div class="band-lookup-row">
+        <input id="band-lookup-input" type="number" step="0.001" placeholder="e.g. 137.5" />
+        <span style="color: var(--text-muted); font-size: 0.85rem;">MHz</span>
+        <span id="band-lookup-badge" class="freq-badge" style="display: none;"></span>
+      </div>
+      <div class="band-lookup-chips" id="band-lookup-chips"></div>
+      <div class="band-reference-table" id="band-reference-table"></div>
     </section>
 {% endblock %}
 

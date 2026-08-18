@@ -206,3 +206,23 @@ tr:last-child td { border-bottom: none; }
   display: block; margin-top: 0.4rem; color: var(--accent2); text-decoration: none; font-size: 0.78rem;
 }
 .satnogs-tooltip-link:hover { text-decoration: underline; }
+
+.freq-badge {
+  display: inline-flex; align-items: center; padding: 0.05rem 0.5rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+}
+.freq-badge.c-gray { background: rgba(107, 107, 114, 0.14); color: var(--text-muted); }
+.freq-badge.c-amber { background: rgba(217, 165, 33, 0.16); color: #d9a521; }
+.freq-badge.c-blue { background: rgba(0, 145, 234, 0.14); color: var(--accent2); }
+.freq-badge.c-teal { background: rgba(15, 157, 132, 0.16); color: #0f9d84; }
+.freq-badge.c-purple { background: rgba(144, 97, 232, 0.16); color: #9061e8; }
+
+.freq-tooltip {
+  position: fixed; z-index: 200; max-width: 16rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--shadow); padding: 0.5rem 0.65rem; font-size: 0.8rem;
+}
+.freq-tooltip-freq {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; margin-bottom: 0.3rem;
+}
+.freq-tooltip-hint { color: var(--text-muted); }

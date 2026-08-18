@@ -23,6 +23,34 @@
     }
   }
 
+  // Live band badge for an editable Hz frequency input -- call update()
+  // after any change to the input's value. Empty/non-numeric/placeholder
+  // ({frequency}) values just clear the badge rather than showing an
+  // "unrecognized" state, since those aren't really frequencies yet.
+  //
+  // Shows just the band name (e.g. "UHF") rather than the full "UHF · ISM"
+  // -- a real, always-visible pill wide enough to read comfortably, but
+  // short enough not to shove every later column in a tight row (like the
+  // downlink editor) out from under its header label. The tag, if any,
+  // is still there on hover via the native title tooltip.
+  function createFreqBadge(getHz) {
+    const el = document.createElement("span");
+    function update() {
+      const hz = getHz();
+      const match = Number.isFinite(hz) && hz > 0 ? window.ParkesBands.detect(hz) : null;
+      if (!match) {
+        el.style.display = "none";
+        return;
+      }
+      el.className = `freq-badge c-${match.color}`;
+      el.textContent = match.band;
+      el.title = window.ParkesBands.label(match);
+      el.style.display = "";
+    }
+    update();
+    return { el, update };
+  }
+
   function slugify(text) {
     return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "profile";
   }
@@ -297,12 +325,22 @@
     input.type = "text";
     input.value = value || "";
     input.className = value && String(value).startsWith("{") && String(value).endsWith("}") ? "is-placeholder" : "";
+    label.appendChild(input);
+    // Only the "frequency" field's raw value is worth band-detecting --
+    // it's plain text (not type="number") since it can also hold the
+    // {frequency} placeholder token, which Number() correctly turns into
+    // NaN and the badge just hides itself for.
+    let freqBadge = null;
+    if (field.key === "frequency") {
+      freqBadge = createFreqBadge(() => Number(input.value));
+      label.appendChild(freqBadge.el);
+    }
     input.addEventListener("input", () => {
       fields[field.key] = input.value;
       input.className = input.value.startsWith("{") && input.value.endsWith("}") ? "is-placeholder" : "";
+      if (freqBadge) freqBadge.update();
       refreshModulePreview(profile);
     });
-    label.appendChild(input);
     return label;
   }
 
@@ -985,6 +1023,29 @@
     return profile ? profile.name : id;
   }
 
+  // Hz to hang a band badge/tooltip off of, when the summary boils down to
+  // a single unambiguous frequency -- multiple downlinks collapse to
+  // "N downlinks" with nothing specific to point at.
+  function primaryFrequencyHz(obj) {
+    return obj.downlinks.length === 1 ? obj.downlinks[0].frequency : null;
+  }
+
+  // Fills a table cell with the downlink summary text plus, when there's a
+  // single unambiguous frequency, a visible band badge (not just a hover
+  // tooltip -- a tiny hover-only indicator turned out to be easy to miss
+  // entirely) and a data-freq-hz for freq-tooltip.js's precise-MHz popover.
+  function renderDownlinkCell(td, obj) {
+    td.textContent = downlinkSummary(obj);
+    const hz = primaryFrequencyHz(obj);
+    if (!hz) return;
+    td.dataset.freqHz = hz;
+    const badge = createFreqBadge(() => hz);
+    if (badge.el.style.display !== "none") {
+      badge.el.style.marginLeft = "0.4rem";
+      td.appendChild(badge.el);
+    }
+  }
+
   function downlinkSummary(obj) {
     if (obj.downlinks.length === 0) return "no downlinks";
     if (obj.downlinks.length === 1) {
@@ -1075,7 +1136,7 @@
       nameTd.innerHTML = `${escapeHtml(obj.name)} <span class="tracked-norad">(${obj.norad})</span>`;
 
       const downlinkTd = document.createElement("td");
-      downlinkTd.textContent = downlinkSummary(obj);
+      renderDownlinkCell(downlinkTd, obj);
 
       const priorityTd = document.createElement("td");
       priorityTd.style.whiteSpace = "nowrap";
@@ -1142,36 +1203,69 @@
   // edit that needs the whole view rebuilt (add/remove a row). The
   // per-row SatNOGS link only appears when `obj.norad` is set -- static
   // positions aren't satellites, so they don't get one.
+  // Builds a labeled "<label>Text<input/><badge?/></label>" -- the shared
+  // shape for every field in a downlink block now that there's no header
+  // row to align against.
+  //
+  // Width/flex-basis sizing has to go on the *label* (labelClass), not the
+  // input -- the label is column-direction (text stacked over field), so a
+  // `flex` on the input itself resolves against that column's main axis
+  // (vertical) rather than the row's, and grows the input to fill the
+  // block's whole height instead of its width.
+  function labeledField(labelText, input, labelClass) {
+    const label = document.createElement("label");
+    if (labelClass) label.className = labelClass;
+    label.appendChild(document.createTextNode(labelText));
+    label.appendChild(input);
+    return label;
+  }
+
   function renderDownlinkRows(container, obj, { profileList, rerender }) {
     const links = obj.downlinks;
-    if (links.length > 0) {
-      const head = document.createElement("div");
-      head.className = "downlink-row downlink-row-head";
-      head.innerHTML =
-        `<span class="field-label downlink-enabled"></span>` +
-        `<span class="field-label downlink-freq">down (Hz)</span>` +
-        `<span class="field-label downlink-freq">up (Hz)</span>` +
-        `<span class="field-label downlink-desc">description</span>` +
-        `<span class="field-label downlink-mode">mode</span>` +
-        `<span class="field-label downlink-baud">baud</span>` +
-        `<span class="field-label">app</span>`;
-      container.appendChild(head);
-    }
-
     const availableProfiles = profileList();
 
     links.forEach((link, index) => {
-      const row = document.createElement("div");
-      row.className = "downlink-row";
+      const block = document.createElement("div");
+      block.className = "group-block downlink-block";
 
+      const topRow = document.createElement("div");
+      topRow.className = "downlink-block-top";
+
+      const enabledLabel = document.createElement("label");
+      enabledLabel.className = "downlink-enabled-label";
       const enabledInput = document.createElement("input");
       enabledInput.type = "checkbox";
-      enabledInput.className = "downlink-enabled";
       enabledInput.checked = link.enabled !== false;
       enabledInput.title = "Enabled -- unchecked downlinks are skipped by the Pass Orchestrator";
       enabledInput.addEventListener("change", () => {
         link.enabled = enabledInput.checked;
       });
+      enabledLabel.append(enabledInput, document.createTextNode(" Enabled"));
+      topRow.appendChild(enabledLabel);
+
+      const topActions = document.createElement("div");
+      topActions.className = "row";
+      if (obj.norad) {
+        const satnogsLink = document.createElement("a");
+        satnogsLink.className = "downlink-satnogs-link";
+        satnogsLink.href = `https://db.satnogs.org/satellite/${obj.norad}/`;
+        satnogsLink.target = "_blank";
+        satnogsLink.rel = "noopener";
+        satnogsLink.title = `View ${obj.name} on SatNOGS DB`;
+        satnogsLink.textContent = "↗";
+        topActions.appendChild(satnogsLink);
+      }
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn-sm";
+      removeBtn.textContent = "× Remove downlink";
+      removeBtn.addEventListener("click", () => {
+        links.splice(index, 1);
+        rerender();
+      });
+      topActions.appendChild(removeBtn);
+      topRow.appendChild(topActions);
+      block.appendChild(topRow);
 
       const freqInput = document.createElement("input");
       freqInput.type = "number";
@@ -1179,30 +1273,81 @@
       freqInput.className = "downlink-freq";
       freqInput.value = link.frequency;
       freqInput.title = "Downlink frequency (Hz) -- {frequency}/{down_frequency}";
+      const freqBadge = createFreqBadge(() => Number(freqInput.value));
       freqInput.addEventListener("input", () => {
         link.frequency = Number(freqInput.value);
+        freqBadge.update();
       });
+      const freqWrap = document.createElement("div");
+      freqWrap.className = "freq-input-wrap";
+      freqWrap.append(freqInput, freqBadge.el);
 
-      const upFreqInput = document.createElement("input");
-      upFreqInput.type = "number";
-      upFreqInput.step = "1";
-      upFreqInput.className = "downlink-freq";
-      upFreqInput.value = link.up_frequency ?? "";
-      upFreqInput.placeholder = "no uplink";
-      upFreqInput.title = "Associated uplink frequency (Hz), if any -- {up_frequency}";
-      upFreqInput.addEventListener("input", () => {
-        link.up_frequency = upFreqInput.value === "" ? null : Number(upFreqInput.value);
-      });
+      const downRow = document.createElement("div");
+      downRow.className = "freq-field-row";
+      downRow.appendChild(labeledField("Down (Hz)", freqWrap));
+
+      // The uplink is a toggle, not always-shown -- most downlinks don't
+      // have one, and a second frequency row only earns its vertical space
+      // when there's actually something to put in it.
+      if (link.up_frequency != null) {
+        downRow.appendChild(buildUplinkRow());
+      } else {
+        const addUplinkBtn = document.createElement("button");
+        addUplinkBtn.type = "button";
+        addUplinkBtn.className = "btn-sm";
+        addUplinkBtn.textContent = "+ Add uplink";
+        addUplinkBtn.addEventListener("click", () => {
+          link.up_frequency = link.frequency;
+          rerender();
+        });
+        downRow.appendChild(addUplinkBtn);
+      }
+      block.appendChild(downRow);
+
+      function buildUplinkRow() {
+        const row = document.createElement("div");
+        row.className = "freq-field-row";
+
+        const upFreqInput = document.createElement("input");
+        upFreqInput.type = "number";
+        upFreqInput.step = "1";
+        upFreqInput.className = "downlink-freq";
+        upFreqInput.value = link.up_frequency ?? "";
+        upFreqInput.title = "Associated uplink frequency (Hz) -- {up_frequency}";
+        const upFreqBadge = createFreqBadge(() => Number(upFreqInput.value));
+        upFreqInput.addEventListener("input", () => {
+          link.up_frequency = upFreqInput.value === "" ? null : Number(upFreqInput.value);
+          upFreqBadge.update();
+        });
+        const upFreqWrap = document.createElement("div");
+        upFreqWrap.className = "freq-input-wrap";
+        upFreqWrap.append(upFreqInput, upFreqBadge.el);
+        row.appendChild(labeledField("Up (Hz)", upFreqWrap));
+
+        const removeUpBtn = document.createElement("button");
+        removeUpBtn.type = "button";
+        removeUpBtn.className = "btn-sm";
+        removeUpBtn.textContent = "Remove uplink";
+        removeUpBtn.addEventListener("click", () => {
+          link.up_frequency = null;
+          rerender();
+        });
+        row.appendChild(removeUpBtn);
+        return row;
+      }
+
+      const detailsRow = document.createElement("div");
+      detailsRow.className = "downlink-details-row";
 
       const descInput = document.createElement("input");
       descInput.type = "text";
       descInput.className = "downlink-desc";
       descInput.value = link.description || "";
       descInput.placeholder = "description / full name";
-      descInput.title = "Comment or full name for this downlink";
       descInput.addEventListener("input", () => {
         link.description = descInput.value;
       });
+      detailsRow.appendChild(labeledField("Description", descInput, "downlink-desc-field"));
 
       const modeInput = document.createElement("input");
       modeInput.type = "text";
@@ -1213,6 +1358,7 @@
       modeInput.addEventListener("input", () => {
         link.mode = modeInput.value;
       });
+      detailsRow.appendChild(labeledField("Mode", modeInput, "downlink-mode-field"));
 
       const baudInput = document.createElement("input");
       baudInput.type = "number";
@@ -1220,10 +1366,10 @@
       baudInput.className = "downlink-baud";
       baudInput.value = link.baud ?? "";
       baudInput.placeholder = "baud";
-      baudInput.title = "Baud rate, if applicable";
       baudInput.addEventListener("input", () => {
         link.baud = baudInput.value === "" ? null : Number(baudInput.value);
       });
+      detailsRow.appendChild(labeledField("Baud", baudInput, "downlink-baud-field"));
 
       const appSelect = document.createElement("select");
       appSelect.title = "App profile to launch";
@@ -1249,32 +1395,10 @@
       appSelect.addEventListener("change", () => {
         link.app = appSelect.value;
       });
+      detailsRow.appendChild(labeledField("App", appSelect, "downlink-app-field"));
 
-      const rowFields = [enabledInput, freqInput, upFreqInput, descInput, modeInput, baudInput, appSelect];
-
-      if (obj.norad) {
-        const satnogsLink = document.createElement("a");
-        satnogsLink.className = "downlink-satnogs-link";
-        satnogsLink.href = `https://db.satnogs.org/satellite/${obj.norad}/`;
-        satnogsLink.target = "_blank";
-        satnogsLink.rel = "noopener";
-        satnogsLink.title = `View ${obj.name} on SatNOGS DB`;
-        satnogsLink.textContent = "↗";
-        rowFields.push(satnogsLink);
-      }
-
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "btn-sm";
-      removeBtn.textContent = "×";
-      removeBtn.addEventListener("click", () => {
-        links.splice(index, 1);
-        rerender();
-      });
-      rowFields.push(removeBtn);
-
-      row.append(...rowFields);
-      container.appendChild(row);
+      block.appendChild(detailsRow);
+      container.appendChild(block);
     });
   }
 
@@ -1458,7 +1582,7 @@
       }
       for (const t of satnogsTransmitters) {
         const row = document.createElement("div");
-        row.className = "downlink-row";
+        row.className = "row";
         if (!t.alive) row.style.opacity = "0.55";
         const freqLabel = t.frequency ? (t.frequency / 1e6).toFixed(3) + " MHz down" : "";
         const uplinkLabel = t.uplink ? (t.uplink / 1e6).toFixed(3) + " MHz up" : "";
@@ -1469,6 +1593,12 @@
         const label = document.createElement("span");
         label.textContent = `${t.description || modeLabel} — ${bothLabel} (${modeLabel}${baudLabel}, ${aliveLabel})`;
         row.appendChild(label);
+        if (t.frequency) {
+          label.dataset.freqHz = t.frequency;
+          const badge = createFreqBadge(() => t.frequency);
+          badge.el.style.marginLeft = "0.4rem";
+          row.appendChild(badge.el);
+        }
 
         const addBtn = document.createElement("button");
         addBtn.type = "button";
@@ -1765,7 +1895,7 @@
       azElTd.textContent = `${position.az.toFixed(1)}° / ${position.el.toFixed(1)}°`;
 
       const downlinkTd = document.createElement("td");
-      downlinkTd.textContent = downlinkSummary(position);
+      renderDownlinkCell(downlinkTd, position);
 
       const active = activePositionDownlink(position);
 
@@ -2131,6 +2261,58 @@
       flashStatus(overlapsStatus, `error: ${err.message}`, true);
     }
   });
+
+  // ---------------------------------------------------------------------
+  // Band Reference -- a standalone lookup, not tied to any downlink.
+  // ---------------------------------------------------------------------
+
+  const bandLookupInput = document.getElementById("band-lookup-input");
+  const bandLookupBadge = document.getElementById("band-lookup-badge");
+  const bandLookupChips = document.getElementById("band-lookup-chips");
+  const bandReferenceTable = document.getElementById("band-reference-table");
+
+  function refreshBandLookup() {
+    const mhz = parseFloat(bandLookupInput.value);
+    const match = Number.isFinite(mhz) && mhz > 0 ? window.ParkesBands.detect(mhz * 1e6) : null;
+    if (!match) {
+      bandLookupBadge.style.display = "none";
+      return;
+    }
+    bandLookupBadge.className = `freq-badge c-${match.color}`;
+    bandLookupBadge.textContent = window.ParkesBands.label(match);
+    bandLookupBadge.style.display = "";
+  }
+  bandLookupInput.addEventListener("input", refreshBandLookup);
+
+  [
+    ["108", "FM/air"],
+    ["137.5", "APT"],
+    ["401.5", "LRPT"],
+    ["433.5", "ISM"],
+    ["868", "ISM"],
+    ["1700", "HRPT"],
+    ["2400", "ISM"],
+    ["12000", "Ku-band"],
+  ].forEach(([mhz, label]) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.textContent = `${mhz} (${label})`;
+    chip.addEventListener("click", () => {
+      bandLookupInput.value = mhz;
+      refreshBandLookup();
+    });
+    bandLookupChips.appendChild(chip);
+  });
+
+  for (const b of window.ParkesBands.generalBands()) {
+    const row = document.createElement("div");
+    const badge = document.createElement("span");
+    badge.className = `freq-badge c-${b.color}`;
+    badge.textContent = b.band;
+    row.appendChild(badge);
+    row.appendChild(document.createTextNode(`${b.min}–${b.max} MHz`));
+    bandReferenceTable.appendChild(row);
+  }
 
   // ---------------------------------------------------------------------
 
