@@ -25,6 +25,13 @@
     "gpsd_port",
   ]);
 
+  // Subset of NUMERIC_FIELDS that are genuinely optional (default None --
+  // "device default" tuning, see settings.html's placeholder text): a blank
+  // field here means "clear it back to unset," so it's sent as an explicit
+  // null. Every other numeric field always has a real default, so a blank
+  // field there means "leave unchanged" and is just omitted from the payload.
+  const NULLABLE_NUMERIC_FIELDS = new Set(["rotctld_timeout_ms", "rotctld_retry"]);
+
   // Checkboxes: FormData omits an unchecked box entirely and stringifies a
   // checked one as "on", so these are read/written via .checked directly
   // rather than through the generic FormData loop below.
@@ -151,7 +158,10 @@
       for (const [key, raw] of formData.entries()) {
         if (BOOLEAN_FIELDS.has(key)) continue; // handled below
         if (NUMERIC_FIELDS.has(key)) {
-          if (raw.trim() === "") continue; // don't coerce a blank field to 0
+          if (raw.trim() === "") {
+            if (NULLABLE_NUMERIC_FIELDS.has(key)) values[key] = null;
+            continue; // otherwise: don't coerce a blank field to 0, leave unchanged
+          }
           values[key] = Number(raw);
         } else {
           values[key] = raw;

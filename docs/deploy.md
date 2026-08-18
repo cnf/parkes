@@ -77,3 +77,26 @@ sudo usermod -aG dialout parkes
 
 This is a one-time setup step regardless of which specific device path
 gets configured later through the UI.
+
+## Use a stable device path, not `/dev/ttyUSB0`
+
+`/dev/ttyUSB0`/`ttyACM0`-style paths are assigned by USB enumeration order,
+not device identity -- unplugging and replugging the rotator board (or
+anything else grabbing a port first) can shift its number. Since
+rotctld's own crash-restart backoff (`InfraDaemon`, see
+`parkes/infra_supervisor.py`) just keeps retrying whatever path is saved,
+a shifted device node reads as a persistent crash loop until the Settings
+page is updated by hand.
+
+Point the Settings page's rotator device field at the board's
+`/dev/serial/by-id/...` symlink instead (`ls -l /dev/serial/by-id/` with
+the board plugged in). udev creates these automatically for any
+USB-serial adapter that reports a vendor/product/serial string -- true of
+the EasyCommII board's ESP32-S3 -- and they stay constant across
+replugs and reboots since they're keyed to device identity, not
+enumeration order. Confirmed working on the real board.
+
+If a device doesn't expose a serial number (by-id path missing or
+ambiguous between multiple identical boards), fall back to a custom udev
+rule matching vendor:product ID with `SYMLINK+="rotator"`, then point
+the Settings page at `/dev/rotator`.

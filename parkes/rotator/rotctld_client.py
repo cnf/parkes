@@ -55,14 +55,22 @@ class RotctldClient:
 
     async def _expect_rprt(self) -> None:
         line = await self._read_line()
-        code = int(line.split()[1])
+        parts = line.split()
+        if len(parts) != 2 or parts[0] != "RPRT":
+            raise RotctldError(f"unexpected rotctld response: {line!r}")
+        code = int(parts[1])
         if code != 0:
             raise RotctldError(f"rotctld returned error {code}")
 
     async def get_position(self) -> tuple[float, float]:
         async with self._lock:
             await self._send("p")
-            az = float(await self._read_line())
+            first = await self._read_line()
+            if first.startswith("RPRT"):
+                parts = first.split()
+                code = int(parts[1]) if len(parts) == 2 else -1
+                raise RotctldError(f"rotctld returned error {code}")
+            az = float(first)
             el = float(await self._read_line())
             return az, el
 
