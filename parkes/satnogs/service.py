@@ -3,6 +3,11 @@ from parkes.satnogs import cache, client
 
 
 def _normalize_satellite(raw: dict) -> dict:
+    # SatNOGS DB litters unset string fields with the literal text "None"
+    # rather than leaving them null -- flatten that here so callers (and
+    # the tooltip) only ever have to check for falsy/empty, not a
+    # string that spells out its own absence.
+    operator = raw.get("operator")
     return {
         "norad": raw.get("norad_cat_id"),
         "name": raw.get("name"),
@@ -11,6 +16,12 @@ def _normalize_satellite(raw: dict) -> dict:
         # search_satellites() can match against them too, not meant for
         # display.
         "names": raw.get("names"),
+        # ISO date the satellite launched, e.g. "1998-11-20T00:00:00Z".
+        "launched": raw.get("launched"),
+        # Comma-separated ISO 3166-1 alpha-2 country codes, e.g. "RU,US" --
+        # who built/registered it, not who currently operates it.
+        "countries": raw.get("countries"),
+        "operator": operator if operator and operator != "None" else None,
     }
 
 

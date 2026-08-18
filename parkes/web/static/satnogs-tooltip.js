@@ -33,6 +33,28 @@
     return "satnogs-status-unknown";
   }
 
+  // ISO 3166-1 alpha-2 -> its two regional-indicator emoji, which any
+  // system emoji font renders as the flag -- no lookup table needed, just
+  // shifting each letter into the regional-indicator codepoint block.
+  function countryFlag(code) {
+    if (!/^[A-Za-z]{2}$/.test(code)) return "";
+    return String.fromCodePoint(...[...code.toUpperCase()].map((ch) => 127397 + ch.charCodeAt(0)));
+  }
+
+  function countryFlags(countries) {
+    if (!countries) return "";
+    return countries
+      .split(",")
+      .map((c) => countryFlag(c.trim()))
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function launchYear(launched) {
+    const year = launched && launched.slice(0, 4);
+    return year && /^\d{4}$/.test(year) ? year : null;
+  }
+
   function render(norad, info) {
     const el = ensureTooltipEl();
     const url = `https://db.satnogs.org/satellite/${encodeURIComponent(norad)}/`;
@@ -42,6 +64,15 @@
     } else if (info === null) {
       body = `<div class="satnogs-tooltip-hint">not found in SatNOGS DB</div>`;
     } else {
+      const flags = countryFlags(info.countries);
+      const year = launchYear(info.launched);
+      const metaBits = [flags, year ? `launched ${year}` : null].filter(Boolean);
+      const metaLine = metaBits.length
+        ? `<div class="satnogs-tooltip-meta">${metaBits.join(" · ")}</div>`
+        : "";
+      const operatorLine = info.operator
+        ? `<div class="satnogs-tooltip-operator">${escapeHtml(info.operator)}</div>`
+        : "";
       const namesLine = info.names
         ? `<div class="satnogs-tooltip-names">aka ${escapeHtml(info.names)}</div>`
         : "";
@@ -50,6 +81,8 @@
         <div class="satnogs-tooltip-status">
           <span class="satnogs-status-dot ${statusClass(info.status)}"></span>${escapeHtml(info.status || "unknown")}
         </div>
+        ${metaLine}
+        ${operatorLine}
         ${namesLine}
       `;
     }

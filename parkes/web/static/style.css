@@ -201,6 +201,8 @@ tr:last-child td { border-bottom: none; }
 .satnogs-status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
 .satnogs-status-dot.satnogs-status-alive { background: var(--success); }
 .satnogs-status-dot.satnogs-status-dead { background: var(--danger); }
+.satnogs-tooltip-meta { color: var(--text-muted); margin-top: 0.3rem; font-size: 0.85rem; }
+.satnogs-tooltip-operator { color: var(--text-muted); margin-top: 0.2rem; }
 .satnogs-tooltip-names { color: var(--text-muted); margin-top: 0.2rem; }
 .satnogs-tooltip-link {
   display: block; margin-top: 0.4rem; color: var(--accent2); text-decoration: none; font-size: 0.78rem;

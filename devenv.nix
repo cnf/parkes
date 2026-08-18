@@ -23,7 +23,7 @@
     ]);
   };
 
-  processes.web.exec = "uvicorn parkes.main:app --host 0.0.0.0 --port 8000";
+  processes.web.exec = "uvicorn parkes.main:app --reload --host 0.0.0.0 --port 8000";
 
   processes.gpsfake.exec = "gpsfake ./data/gpsfake.nmea";
 
