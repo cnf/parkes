@@ -189,3 +189,20 @@ tr:last-child td { border-bottom: none; }
    which was flipping the dialog into a scrolling container (and jumping
    the scroll position) the instant a search produced results. */
 .modal-dialog.modal-lg { max-width: 42rem; overflow: visible; }
+
+.satnogs-tooltip {
+  position: fixed; z-index: 200; max-width: 18rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--shadow); padding: 0.6rem 0.7rem; font-size: 0.8rem;
+}
+.satnogs-tooltip-hint { color: var(--text-muted); }
+.satnogs-tooltip-name { font-weight: 600; margin-bottom: 0.2rem; }
+.satnogs-tooltip-status { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); }
+.satnogs-status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+.satnogs-status-dot.satnogs-status-alive { background: var(--success); }
+.satnogs-status-dot.satnogs-status-dead { background: var(--danger); }
+.satnogs-tooltip-names { color: var(--text-muted); margin-top: 0.2rem; }
+.satnogs-tooltip-link {
+  display: block; margin-top: 0.4rem; color: var(--accent2); text-decoration: none; font-size: 0.78rem;
+}
+.satnogs-tooltip-link:hover { text-decoration: underline; }

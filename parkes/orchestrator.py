@@ -132,6 +132,8 @@ class PassOrchestrator:
                 continue
             target_id = f"sat:{obj['norad']}"
             for downlink in obj.get("downlinks", []):
+                if not downlink.get("enabled", True):
+                    continue
                 try:
                     pass_info = self._sky.next_pass(target_id, min_elevation=min_elevation)
                 except KeyError:
@@ -208,7 +210,19 @@ class PassOrchestrator:
             )
         elif profile is not None:
             try:
-                command = resolve_command(profile["command"], frequency=downlink["frequency"])
+                # {frequency}/{down_frequency} are aliases for the same
+                # value; {up_frequency} is only supplied when this downlink
+                # has an associated uplink (e.g. a transponder/repeater
+                # pair) -- a command template referencing it without one
+                # configured raises KeyError below, same as any other
+                # missing placeholder.
+                overrides = {
+                    "frequency": downlink["frequency"],
+                    "down_frequency": downlink["frequency"],
+                }
+                if downlink.get("up_frequency"):
+                    overrides["up_frequency"] = downlink["up_frequency"]
+                command = resolve_command(profile["command"], **overrides)
             except (KeyError, IndexError) as exc:
                 logger.warning("orchestrator: bad app profile %r: %s", profile_name, exc)
         elif profile_name:

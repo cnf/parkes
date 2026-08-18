@@ -990,7 +990,10 @@
     if (obj.downlinks.length === 1) {
       const d = obj.downlinks[0];
       const freq = (d.frequency / 1e6).toFixed(3) + " MHz";
-      return d.app ? `${freq} → ${profileName(d.app)}` : freq;
+      const upFreq = d.up_frequency ? ` / ↑${(d.up_frequency / 1e6).toFixed(3)} MHz` : "";
+      const label = d.mode ? `${freq}${upFreq} (${d.mode})` : `${freq}${upFreq}`;
+      const withApp = d.app ? `${label} → ${profileName(d.app)}` : label;
+      return d.enabled === false ? `${withApp} (disabled)` : withApp;
     }
     return `${obj.downlinks.length} downlinks`;
   }
@@ -1004,7 +1007,12 @@
       enabled: obj.enabled,
       downlinks: obj.downlinks.map((downlink) => ({
         frequency: downlink.frequency,
+        up_frequency: downlink.up_frequency ?? null,
         app: downlink.app,
+        description: downlink.description || null,
+        mode: downlink.mode || null,
+        baud: downlink.baud ?? null,
+        enabled: downlink.enabled !== false,
       })),
     };
     await apiFetch(`/api/orchestrator/objects/${obj.norad}`, {
@@ -1063,6 +1071,7 @@
       cbTd.appendChild(cb);
 
       const nameTd = document.createElement("td");
+      nameTd.setAttribute("data-satnogs-norad", obj.norad);
       nameTd.innerHTML = `${escapeHtml(obj.name)} <span class="tracked-norad">(${obj.norad})</span>`;
 
       const downlinkTd = document.createElement("td");
@@ -1103,6 +1112,9 @@
   function enterTrackedEdit(index) {
     trackedEditIndex = index;
     trackedEditSnapshot = JSON.parse(JSON.stringify(trackedObjects[index]));
+    satnogsTransmitters = null;
+    satnogsLoading = false;
+    satnogsError = false;
     renderTrackedEdit();
   }
 
@@ -1113,6 +1125,157 @@
     trackedEditIndex = null;
     trackedEditSnapshot = null;
     renderTrackedList();
+  }
+
+  // One row per downlink -- an uplink isn't a separate thing to track, it's
+  // an optional second frequency on the same entry (e.g. a transponder or
+  // repeater's up/down pair). Parkes doesn't care whether the launched app
+  // receives, transmits, or both; {frequency}/{down_frequency} always alias
+  // this downlink's frequency, and {up_frequency} is available to the
+  // command template whenever up_frequency is set (see
+  // PassOrchestrator._run_pass and StandaloneAppRunner.start).
+  //
+  // Shared by both the Tracked Satellites and Static Positions editors --
+  // `profileList()` picks which app profiles are offered ("pass"-mode for
+  // a satellite downlink, "standalone"-mode for a position, since that's
+  // who actually launches it), `rerender()` is called after an in-place
+  // edit that needs the whole view rebuilt (add/remove a row). The
+  // per-row SatNOGS link only appears when `obj.norad` is set -- static
+  // positions aren't satellites, so they don't get one.
+  function renderDownlinkRows(container, obj, { profileList, rerender }) {
+    const links = obj.downlinks;
+    if (links.length > 0) {
+      const head = document.createElement("div");
+      head.className = "downlink-row downlink-row-head";
+      head.innerHTML =
+        `<span class="field-label downlink-enabled"></span>` +
+        `<span class="field-label downlink-freq">down (Hz)</span>` +
+        `<span class="field-label downlink-freq">up (Hz)</span>` +
+        `<span class="field-label downlink-desc">description</span>` +
+        `<span class="field-label downlink-mode">mode</span>` +
+        `<span class="field-label downlink-baud">baud</span>` +
+        `<span class="field-label">app</span>`;
+      container.appendChild(head);
+    }
+
+    const availableProfiles = profileList();
+
+    links.forEach((link, index) => {
+      const row = document.createElement("div");
+      row.className = "downlink-row";
+
+      const enabledInput = document.createElement("input");
+      enabledInput.type = "checkbox";
+      enabledInput.className = "downlink-enabled";
+      enabledInput.checked = link.enabled !== false;
+      enabledInput.title = "Enabled -- unchecked downlinks are skipped by the Pass Orchestrator";
+      enabledInput.addEventListener("change", () => {
+        link.enabled = enabledInput.checked;
+      });
+
+      const freqInput = document.createElement("input");
+      freqInput.type = "number";
+      freqInput.step = "1";
+      freqInput.className = "downlink-freq";
+      freqInput.value = link.frequency;
+      freqInput.title = "Downlink frequency (Hz) -- {frequency}/{down_frequency}";
+      freqInput.addEventListener("input", () => {
+        link.frequency = Number(freqInput.value);
+      });
+
+      const upFreqInput = document.createElement("input");
+      upFreqInput.type = "number";
+      upFreqInput.step = "1";
+      upFreqInput.className = "downlink-freq";
+      upFreqInput.value = link.up_frequency ?? "";
+      upFreqInput.placeholder = "no uplink";
+      upFreqInput.title = "Associated uplink frequency (Hz), if any -- {up_frequency}";
+      upFreqInput.addEventListener("input", () => {
+        link.up_frequency = upFreqInput.value === "" ? null : Number(upFreqInput.value);
+      });
+
+      const descInput = document.createElement("input");
+      descInput.type = "text";
+      descInput.className = "downlink-desc";
+      descInput.value = link.description || "";
+      descInput.placeholder = "description / full name";
+      descInput.title = "Comment or full name for this downlink";
+      descInput.addEventListener("input", () => {
+        link.description = descInput.value;
+      });
+
+      const modeInput = document.createElement("input");
+      modeInput.type = "text";
+      modeInput.className = "downlink-mode";
+      modeInput.value = link.mode || "";
+      modeInput.placeholder = "mode";
+      modeInput.title = "Modulation/mode (e.g. FM, HRPT, GMSK)";
+      modeInput.addEventListener("input", () => {
+        link.mode = modeInput.value;
+      });
+
+      const baudInput = document.createElement("input");
+      baudInput.type = "number";
+      baudInput.step = "any";
+      baudInput.className = "downlink-baud";
+      baudInput.value = link.baud ?? "";
+      baudInput.placeholder = "baud";
+      baudInput.title = "Baud rate, if applicable";
+      baudInput.addEventListener("input", () => {
+        link.baud = baudInput.value === "" ? null : Number(baudInput.value);
+      });
+
+      const appSelect = document.createElement("select");
+      appSelect.title = "App profile to launch";
+      const noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = "(no app)";
+      appSelect.appendChild(noneOpt);
+      for (const p of availableProfiles) {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        appSelect.appendChild(opt);
+      }
+      if (link.app && !availableProfiles.some((p) => p.id === link.app)) {
+        const existing = profiles.find((p) => p.id === link.app);
+        const opt = document.createElement("option");
+        opt.value = link.app;
+        const modeLabel = existing ? (existing.mode === "standalone" ? "standalone" : "pass") : null;
+        opt.textContent = existing ? `${existing.name} (${modeLabel})` : `${link.app} (missing)`;
+        appSelect.appendChild(opt);
+      }
+      appSelect.value = link.app;
+      appSelect.addEventListener("change", () => {
+        link.app = appSelect.value;
+      });
+
+      const rowFields = [enabledInput, freqInput, upFreqInput, descInput, modeInput, baudInput, appSelect];
+
+      if (obj.norad) {
+        const satnogsLink = document.createElement("a");
+        satnogsLink.className = "downlink-satnogs-link";
+        satnogsLink.href = `https://db.satnogs.org/satellite/${obj.norad}/`;
+        satnogsLink.target = "_blank";
+        satnogsLink.rel = "noopener";
+        satnogsLink.title = `View ${obj.name} on SatNOGS DB`;
+        satnogsLink.textContent = "↗";
+        rowFields.push(satnogsLink);
+      }
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn-sm";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => {
+        links.splice(index, 1);
+        rerender();
+      });
+      rowFields.push(removeBtn);
+
+      row.append(...rowFields);
+      container.appendChild(row);
+    });
   }
 
   function renderTrackedEdit() {
@@ -1135,76 +1298,36 @@
     const heading = document.createElement("div");
     heading.className = "edit-name-input";
     heading.style.cssText = "border: none; padding-left: 0; font-weight: 600;";
+    heading.setAttribute("data-satnogs-norad", obj.norad);
     heading.textContent = `${obj.name} (NORAD ${obj.norad})`;
     trackedEditView.appendChild(heading);
 
-    if (obj.downlinks.length > 0) {
-      const head = document.createElement("div");
-      head.className = "downlink-row downlink-row-head";
-      head.innerHTML = `<span class="field-label">Freq (Hz)</span><span class="field-label">app</span>`;
-      trackedEditView.appendChild(head);
-    }
-
-    const passProfiles = passModeProfiles();
-    obj.downlinks.forEach((downlink, downlinkIndex) => {
-      const row = document.createElement("div");
-      row.className = "downlink-row";
-
-      const freqInput = document.createElement("input");
-      freqInput.type = "number";
-      freqInput.step = "1";
-      freqInput.value = downlink.frequency;
-      freqInput.title = "Frequency (Hz)";
-      freqInput.addEventListener("input", () => {
-        downlink.frequency = Number(freqInput.value);
-      });
-
-      const appSelect = document.createElement("select");
-      appSelect.title = "Pass Orchestrator app profile";
-      const noneOpt = document.createElement("option");
-      noneOpt.value = "";
-      noneOpt.textContent = "(no app)";
-      appSelect.appendChild(noneOpt);
-      for (const p of passProfiles) {
-        const opt = document.createElement("option");
-        opt.value = p.id;
-        opt.textContent = p.name;
-        appSelect.appendChild(opt);
-      }
-      if (downlink.app && !passProfiles.some((p) => p.id === downlink.app)) {
-        const existing = profiles.find((p) => p.id === downlink.app);
-        const opt = document.createElement("option");
-        opt.value = downlink.app;
-        opt.textContent = existing ? `${existing.name} (standalone)` : `${downlink.app} (missing)`;
-        appSelect.appendChild(opt);
-      }
-      appSelect.value = downlink.app;
-      appSelect.addEventListener("change", () => {
-        downlink.app = appSelect.value;
-      });
-
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "btn-sm";
-      removeBtn.textContent = "×";
-      removeBtn.addEventListener("click", () => {
-        obj.downlinks.splice(downlinkIndex, 1);
-        renderTrackedEdit();
-      });
-
-      row.append(freqInput, appSelect, removeBtn);
-      trackedEditView.appendChild(row);
-    });
+    const downlinksHeading = document.createElement("div");
+    downlinksHeading.className = "field-label";
+    downlinksHeading.style.cssText = "margin-top: 0.6rem;";
+    downlinksHeading.textContent = "Downlinks";
+    trackedEditView.appendChild(downlinksHeading);
+    renderDownlinkRows(trackedEditView, obj, { profileList: passModeProfiles, rerender: renderTrackedEdit });
 
     const addDownlinkBtn = document.createElement("button");
     addDownlinkBtn.type = "button";
     addDownlinkBtn.className = "btn-sm";
     addDownlinkBtn.textContent = "+ Add downlink";
     addDownlinkBtn.addEventListener("click", () => {
-      obj.downlinks.push({ frequency: 137500000, app: "" });
+      obj.downlinks.push({
+        frequency: 137500000,
+        up_frequency: null,
+        app: "",
+        description: "",
+        mode: "",
+        baud: null,
+        enabled: true,
+      });
       renderTrackedEdit();
     });
     trackedEditView.appendChild(addDownlinkBtn);
+
+    trackedEditView.appendChild(renderSatnogsSection(obj));
 
     const actionsRow = document.createElement("div");
     actionsRow.className = "row";
@@ -1250,6 +1373,181 @@
     trackedEditView.appendChild(dangerRow);
   }
 
+  // ---------------------------------------------------------------------
+  // SatNOGS DB (https://db.satnogs.org/) lookup -- an optional shortcut for
+  // finding a satellite's NORAD id and real downlink frequencies instead of
+  // typing them in by hand. Every call here is best-effort and degrades to
+  // "no results"/"unavailable" without touching the local search or manual
+  // downlink editing above.
+  // ---------------------------------------------------------------------
+
+  const satnogsSearchInput = document.getElementById("tracked-satnogs-search-input");
+  const satnogsSearchResults = document.getElementById("tracked-satnogs-search-results");
+
+  let satnogsTransmitters = null;
+  let satnogsLoading = false;
+  let satnogsError = false;
+
+  function hideSatnogsSearchResults() {
+    satnogsSearchResults.style.display = "none";
+    satnogsSearchResults.innerHTML = "";
+  }
+
+  async function loadSatnogsTransmitters(norad, forceRefresh) {
+    satnogsLoading = true;
+    satnogsError = false;
+    renderTrackedEdit();
+    try {
+      const refreshParam = forceRefresh ? "&refresh=true" : "";
+      satnogsTransmitters = await apiFetch(`/api/satnogs/transmitters?norad=${norad}${refreshParam}`);
+    } catch {
+      satnogsTransmitters = null;
+      satnogsError = true;
+    }
+    satnogsLoading = false;
+    renderTrackedEdit();
+  }
+
+  function renderSatnogsSection(obj) {
+    const section = document.createElement("div");
+    section.style.cssText = "display: flex; flex-direction: column; align-items: flex-start; margin: 0.75rem 0; gap: 0.3rem;";
+
+    const header = document.createElement("div");
+    header.style.cssText = "display: flex; align-items: center; gap: 0.5rem;";
+    const title = document.createElement("span");
+    title.className = "field-label";
+    title.style.marginBottom = "0";
+    title.textContent = "SatNOGS transmitters";
+    header.appendChild(title);
+
+    if (satnogsTransmitters === null) {
+      const lookupBtn = document.createElement("button");
+      lookupBtn.type = "button";
+      lookupBtn.className = "btn-sm";
+      lookupBtn.textContent = "Look up on SatNOGS";
+      lookupBtn.disabled = satnogsLoading;
+      lookupBtn.addEventListener("click", () => loadSatnogsTransmitters(obj.norad, false));
+      header.appendChild(lookupBtn);
+    } else {
+      const refreshBtn = document.createElement("button");
+      refreshBtn.type = "button";
+      refreshBtn.className = "btn-sm";
+      refreshBtn.textContent = "↻ Refresh";
+      refreshBtn.disabled = satnogsLoading;
+      refreshBtn.addEventListener("click", () => loadSatnogsTransmitters(obj.norad, true));
+      header.appendChild(refreshBtn);
+    }
+    section.appendChild(header);
+
+    if (satnogsLoading) {
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "Looking up transmitters...";
+      section.appendChild(hint);
+    } else if (satnogsError) {
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "SatNOGS unavailable -- add downlinks manually above.";
+      section.appendChild(hint);
+    } else if (satnogsTransmitters !== null) {
+      if (satnogsTransmitters.length === 0) {
+        const hint = document.createElement("div");
+        hint.className = "hint";
+        hint.textContent = "No transmitters found on SatNOGS for this satellite.";
+        section.appendChild(hint);
+      }
+      for (const t of satnogsTransmitters) {
+        const row = document.createElement("div");
+        row.className = "downlink-row";
+        if (!t.alive) row.style.opacity = "0.55";
+        const freqLabel = t.frequency ? (t.frequency / 1e6).toFixed(3) + " MHz down" : "";
+        const uplinkLabel = t.uplink ? (t.uplink / 1e6).toFixed(3) + " MHz up" : "";
+        const bothLabel = [freqLabel, uplinkLabel].filter(Boolean).join(" / ") || "unknown freq";
+        const modeLabel = t.mode ? escapeHtml(t.mode) : "unknown mode";
+        const baudLabel = t.baud ? `, ${t.baud} baud` : "";
+        const aliveLabel = t.alive ? "alive" : "dead";
+        const label = document.createElement("span");
+        label.textContent = `${t.description || modeLabel} — ${bothLabel} (${modeLabel}${baudLabel}, ${aliveLabel})`;
+        row.appendChild(label);
+
+        const addBtn = document.createElement("button");
+        addBtn.type = "button";
+        addBtn.className = "btn-sm";
+        addBtn.textContent = "+ Add";
+        addBtn.disabled = !t.frequency;
+        addBtn.title = !t.frequency ? "No downlink frequency to add" : "";
+        addBtn.addEventListener("click", () => {
+          obj.downlinks.push({
+            frequency: t.frequency,
+            up_frequency: t.uplink ?? null,
+            app: "",
+            description: t.description || "",
+            mode: t.mode || "",
+            baud: t.baud ?? null,
+            enabled: true,
+          });
+          renderTrackedEdit();
+        });
+        row.appendChild(addBtn);
+
+        section.appendChild(row);
+      }
+    }
+
+    return section;
+  }
+
+  let satnogsSearchDebounce;
+  satnogsSearchInput.addEventListener("input", () => {
+    clearTimeout(satnogsSearchDebounce);
+    const q = satnogsSearchInput.value.trim();
+    if (!q) {
+      hideSatnogsSearchResults();
+      return;
+    }
+    satnogsSearchDebounce = setTimeout(async () => {
+      let results;
+      try {
+        results = await apiFetch(`/api/satnogs/satellites?q=${encodeURIComponent(q)}`);
+      } catch {
+        results = [];
+      }
+      satnogsSearchResults.innerHTML = "";
+      for (const sat of results.slice(0, 20)) {
+        if (!sat.norad) continue;
+        const row = document.createElement("div");
+        row.className = "search-result-row";
+        row.setAttribute("data-satnogs-norad", sat.norad);
+        const statusLabel = sat.status ? ` <span style="color: var(--text-muted);">(${escapeHtml(sat.status)})</span>` : "";
+        row.innerHTML = `<span>${escapeHtml(sat.name || "unnamed")}${statusLabel}</span><span style="color: var(--text-muted);">${sat.norad}</span>`;
+        row.addEventListener("click", () => {
+          satnogsSearchInput.value = "";
+          hideSatnogsSearchResults();
+          if (trackedObjects.some((existing) => existing.norad === sat.norad)) {
+            flashStatus(trackedStatus, `${sat.name} is already tracked`, true);
+            return;
+          }
+          trackedObjects.push({
+            norad: sat.norad,
+            name: sat.name || `NORAD ${sat.norad}`,
+            enabled: true,
+            downlinks: [],
+          });
+          enterTrackedEdit(trackedObjects.length - 1);
+          loadSatnogsTransmitters(sat.norad, false);
+        });
+        satnogsSearchResults.appendChild(row);
+      }
+      satnogsSearchResults.style.display = results.length ? "block" : "none";
+    }, 250);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target !== satnogsSearchInput && !satnogsSearchResults.contains(event.target)) {
+      hideSatnogsSearchResults();
+    }
+  });
+
   async function loadObjects() {
     const data = await apiFetch("/api/orchestrator/objects");
     trackedObjects = data.map((obj) => ({
@@ -1258,7 +1556,12 @@
       enabled: obj.enabled !== false,
       downlinks: (obj.downlinks || []).map((downlink) => ({
         frequency: downlink.frequency ?? 137500000,
+        up_frequency: downlink.up_frequency ?? null,
         app: downlink.app || "",
+        description: downlink.description || "",
+        mode: downlink.mode || "",
+        baud: downlink.baud ?? null,
+        enabled: downlink.enabled !== false,
       })),
     }));
     // Older saved files predate the "name" field -- backfill display names
@@ -1297,6 +1600,7 @@
       for (const sat of results.slice(0, 20)) {
         const row = document.createElement("div");
         row.className = "search-result-row";
+        row.setAttribute("data-satnogs-norad", sat.norad);
         row.innerHTML = `<span>${escapeHtml(sat.name)}</span><span style="color: var(--text-muted);">${sat.norad}</span>`;
         row.addEventListener("click", () => {
           searchInput.value = "";
@@ -1309,7 +1613,7 @@
             norad: sat.norad,
             name: sat.name,
             enabled: true,
-            downlinks: [{ frequency: 137500000, app: "" }],
+            downlinks: [{ frequency: 137500000, up_frequency: null, app: "", enabled: true }],
           });
           enterTrackedEdit(trackedObjects.length - 1);
         });
@@ -1352,8 +1656,15 @@
       lat: position.lat ?? null,
       lon: position.lon ?? null,
       altM: position.alt_m ?? 0,
-      app: position.app || "",
-      frequency: position.frequency ?? null,
+      downlinks: (position.downlinks || []).map((d) => ({
+        frequency: d.frequency,
+        up_frequency: d.up_frequency ?? null,
+        app: d.app || "",
+        description: d.description || "",
+        mode: d.mode || "",
+        baud: d.baud ?? null,
+        enabled: d.enabled !== false,
+      })),
     }));
   }
 
@@ -1364,13 +1675,28 @@
     return position.id;
   }
 
+  // Same "first enabled wins" convention as the Pass Orchestrator's own
+  // downlink selection (see PassOrchestrator._candidate_passes/_rank) --
+  // there's no AOS/priority competition here, but reusing it keeps "which
+  // one is active" predictable the same way across both editors.
+  function activePositionDownlink(position) {
+    return (position.downlinks || []).find((d) => d.enabled !== false) || null;
+  }
+
   async function savePosition(position) {
     assignPositionId(position);
     const payload = {
       name: position.name.trim(),
       position_mode: position.positionMode,
-      app: position.app || null,
-      frequency: position.frequency || null,
+      downlinks: position.downlinks.map((d) => ({
+        frequency: d.frequency,
+        up_frequency: d.up_frequency ?? null,
+        app: d.app || null,
+        description: d.description || null,
+        mode: d.mode || null,
+        baud: d.baud ?? null,
+        enabled: d.enabled !== false,
+      })),
       ...(position.positionMode === "latlon"
         ? { lat: position.lat, lon: position.lon, alt_m: position.altM || 0 }
         : { az: position.az, el: position.el }),
@@ -1411,7 +1737,8 @@
   function refreshPositionsStatus() {
     for (const row of positionsTableBody.querySelectorAll("tr[data-position-id]")) {
       const position = staticPositions.find((p) => p.id === row.dataset.positionId);
-      applyPositionStatus(row, position && position.app);
+      const active = position && activePositionDownlink(position);
+      applyPositionStatus(row, active && active.app);
     }
   }
 
@@ -1437,10 +1764,10 @@
       azElTd.className = "position-az-el";
       azElTd.textContent = `${position.az.toFixed(1)}° / ${position.el.toFixed(1)}°`;
 
-      const appTd = document.createElement("td");
-      appTd.textContent = position.app
-        ? profileName(position.app) + (position.frequency ? ` @ ${(position.frequency / 1e6).toFixed(3)} MHz` : "")
-        : "—";
+      const downlinkTd = document.createElement("td");
+      downlinkTd.textContent = downlinkSummary(position);
+
+      const active = activePositionDownlink(position);
 
       const actionsTd = document.createElement("td");
       const goBtn = document.createElement("button");
@@ -1462,7 +1789,7 @@
         refreshStandaloneStatus();
       });
       actionsTd.appendChild(goBtn);
-      if (position.app) {
+      if (active && active.app) {
         const stopBtn = document.createElement("button");
         stopBtn.type = "button";
         stopBtn.className = "btn-sm";
@@ -1487,9 +1814,9 @@
       editBtn.addEventListener("click", () => enterPositionEdit(index));
       editTd.appendChild(editBtn);
 
-      row.append(nameTd, azElTd, appTd, actionsTd, editTd);
+      row.append(nameTd, azElTd, downlinkTd, actionsTd, editTd);
       positionsTableBody.appendChild(row);
-      applyPositionStatus(row, position.app);
+      applyPositionStatus(row, active && active.app);
     });
   }
 
@@ -1651,41 +1978,43 @@
       fieldsRow.appendChild(elLabel);
     }
 
-    const freqLabel = document.createElement("label");
-    freqLabel.appendChild(document.createTextNode("Frequency (Hz) -- optional"));
-    const freqInput = document.createElement("input");
-    freqInput.type = "number";
-    freqInput.step = "1";
-    freqInput.min = "0";
-    freqInput.placeholder = "for the linked app's {frequency}";
-    freqInput.value = position.frequency ?? "";
-    freqInput.addEventListener("input", () => {
-      position.frequency = freqInput.value === "" ? null : Number(freqInput.value);
-    });
-    freqLabel.appendChild(freqInput);
-    fieldsRow.appendChild(freqLabel);
-
-    const appLabel = document.createElement("label");
-    appLabel.appendChild(document.createTextNode("App (optional, standalone only)"));
-    const appSelect = document.createElement("select");
-    const noneOption = document.createElement("option");
-    noneOption.value = "";
-    noneOption.textContent = "(none -- just move)";
-    appSelect.appendChild(noneOption);
-    for (const profile of standaloneProfiles()) {
-      const optionEl = document.createElement("option");
-      optionEl.value = profile.id;
-      optionEl.textContent = profile.name;
-      optionEl.selected = profile.id === position.app;
-      appSelect.appendChild(optionEl);
-    }
-    appSelect.addEventListener("change", () => {
-      position.app = appSelect.value;
-    });
-    appLabel.appendChild(appSelect);
-    fieldsRow.appendChild(appLabel);
-
     positionsEditView.appendChild(fieldsRow);
+
+    // Same downlink shape/editor as Tracked Satellites (frequency, optional
+    // paired uplink, description/mode/baud, an app to launch, an enable
+    // flag) minus the SatNOGS lookup -- a fixed position isn't a satellite,
+    // so there's nothing to look up. "Go" moves the rotator once and
+    // launches the first enabled entry's app, if any (same first-enabled-
+    // wins convention as the Pass Orchestrator; see activePositionDownlink
+    // and api/orchestrator.py's go_static_position). The app must be
+    // "standalone"-mode, since nothing here is pass-triggered.
+    const downlinksHeading = document.createElement("div");
+    downlinksHeading.className = "field-label";
+    downlinksHeading.style.cssText = "margin-top: 0.6rem;";
+    downlinksHeading.textContent = "Downlinks";
+    positionsEditView.appendChild(downlinksHeading);
+    renderDownlinkRows(positionsEditView, position, {
+      profileList: standaloneProfiles,
+      rerender: renderPositionEdit,
+    });
+
+    const addDownlinkBtn = document.createElement("button");
+    addDownlinkBtn.type = "button";
+    addDownlinkBtn.className = "btn-sm";
+    addDownlinkBtn.textContent = "+ Add downlink";
+    addDownlinkBtn.addEventListener("click", () => {
+      position.downlinks.push({
+        frequency: 137500000,
+        up_frequency: null,
+        app: "",
+        description: "",
+        mode: "",
+        baud: null,
+        enabled: true,
+      });
+      renderPositionEdit();
+    });
+    positionsEditView.appendChild(addDownlinkBtn);
 
     const actionsRow = document.createElement("div");
     actionsRow.className = "row";
@@ -1746,8 +2075,7 @@
       lat: null,
       lon: null,
       altM: 0,
-      app: "",
-      frequency: null,
+      downlinks: [],
     });
     enterPositionEdit(staticPositions.length - 1);
   });

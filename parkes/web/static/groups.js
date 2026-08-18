@@ -131,7 +131,7 @@
     for (const sat of satellites) {
       const row = document.createElement("tr");
       row.innerHTML = `
-        <td>${escapeHtml(sat.name)}</td>
+        <td data-satnogs-norad="${sat.norad}">${escapeHtml(sat.name)}</td>
         <td>${sat.norad}</td>
         <td>${escapeHtml(sat.source)}</td>
         <td class="${ageClass(sat.epoch_days_old)}">${sat.epoch_days_old.toFixed(1)}d</td>
@@ -171,7 +171,7 @@
       const row = document.createElement("div");
       row.className = "search-result-row";
       row.innerHTML = `
-        <span>${escapeHtml(sat.name)} <span class="tracked-norad">(${sat.norad})</span></span>
+        <span data-satnogs-norad="${sat.norad}">${escapeHtml(sat.name)} <span class="tracked-norad">(${sat.norad})</span></span>
         <button type="button" class="btn-sm">Remove</button>
       `;
       row.querySelector("button").addEventListener("click", async () => {
@@ -223,6 +223,7 @@
       for (const sat of results.slice(0, 20)) {
         const row = document.createElement("div");
         row.className = "search-result-row";
+        row.setAttribute("data-satnogs-norad", sat.norad);
         const already = memberNorads.has(sat.norad);
         row.innerHTML = `
           <span>${escapeHtml(sat.name)}</span>

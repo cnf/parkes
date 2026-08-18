@@ -102,8 +102,10 @@
       row.dataset.targetId = target.id;
       row.dataset.targetName = target.name;
       const icon = target.kind === "satellite" ? "&#128752; " : "";
+      const noradAttr =
+        target.kind === "satellite" ? ` data-satnogs-norad="${target.id.split(":")[1]}"` : "";
       row.innerHTML = `
-        <td>${icon}${escapeHtml(target.name)}</td>
+        <td${noradAttr}>${icon}${escapeHtml(target.name)}</td>
         <td>${target.az.toFixed(1)}&deg;</td>
         <td>${target.el.toFixed(1)}&deg;</td>
         <td><span class="badge ${target.visible ? "up" : "down"}">${target.visible ? "up" : "down"}</span></td>

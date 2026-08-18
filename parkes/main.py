@@ -24,12 +24,14 @@ from fastapi.templating import Jinja2Templates
 
 from parkes.api.orchestrator import router as orchestrator_router
 from parkes.api.rotator import router as rotator_router
+from parkes.api.satnogs import router as satnogs_router
 from parkes.api.sdr import router as sdr_router
 from parkes.api.settings import router as settings_router
 from parkes.api.tracking import router as tracking_router
 from parkes.config import settings
 from parkes.orchestrator import PassOrchestrator
 from parkes.rotator.rotctld_client import RotctldClient
+from parkes.satnogs.service import SatnogsService
 from parkes.sdr.arbiter import SdrArbiter
 from parkes.sdr.server import SoapyRemoteServer
 from parkes.standalone_apps import StandaloneAppRunner
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.standalone_apps = StandaloneAppRunner(app.state.sdr_arbiter)
     app.state.standalone_apps.start_timer()
+    app.state.satnogs = SatnogsService()
     await app.state.sdr_arbiter.ensure_idle_state()
     yield
     tle_load_task.cancel()
@@ -96,6 +99,7 @@ app.include_router(rotator_router)
 app.include_router(tracking_router)
 app.include_router(sdr_router)
 app.include_router(orchestrator_router)
+app.include_router(satnogs_router)
 app.include_router(settings_router)
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 

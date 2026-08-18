@@ -81,5 +81,17 @@ class Settings(BaseSettings):
     # launch a standalone app" shortcuts. See tracking/static_positions.py.
     static_positions_file: str = "data/tracking/static_positions.json"
 
+    # SatNOGS DB (https://db.satnogs.org/) satellite/transmitter lookup for
+    # the Tracked Objects editor (see parkes/satnogs/) -- lets downlink
+    # frequencies/modes be searched instead of hand-typed. Responses are
+    # cached to disk since SatNOGS rate-limits unauthenticated reads and
+    # lookups are search-triggered, not something that should hit the
+    # network on every keystroke.
+    satnogs_base_url: str = "https://db.satnogs.org/api"
+    satnogs_cache_file: str = "data/satnogs/cache.json"
+    satnogs_api_token: str | None = None  # optional, raises the rate limit
+    satnogs_timeout_seconds: float = 10.0
+    satnogs_cache_max_age_hours: float = 24.0
+
 
 settings = Settings()

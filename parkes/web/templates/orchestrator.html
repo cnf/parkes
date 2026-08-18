@@ -5,11 +5,14 @@
 {% block styles %}
     <style>
       .downlink-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
-      .downlink-row input[type="number"] { width: 10rem; }
-      .downlink-row select { width: 12rem; }
+      .downlink-row .downlink-enabled { width: 1.2rem; flex: 0 0 auto; accent-color: var(--accent); }
+      .downlink-row .downlink-freq { width: 9rem; }
+      .downlink-row .downlink-desc { flex: 1 1 10rem; min-width: 8rem; }
+      .downlink-row .downlink-mode { width: 6rem; }
+      .downlink-row .downlink-baud { width: 6rem; }
+      .downlink-row select { width: 11rem; }
+      .downlink-row .downlink-satnogs-link { flex: 0 0 auto; text-decoration: none; }
       .downlink-row-head span { flex: 0 0 auto; }
-      .downlink-row-head span:nth-child(1) { width: 10rem; }
-      .downlink-row-head span:nth-child(2) { width: 12rem; }
 
       .profile-mode-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
       .profile-mode-row label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; font-weight: normal; }
@@ -99,6 +102,10 @@
           <input id="tracked-search-input" type="text" placeholder="Search satellites to add..." autocomplete="off" />
           <div id="tracked-search-results" class="search-results" style="display: none;"></div>
         </div>
+        <div class="group-search" style="margin-top: 0.5rem;">
+          <input id="tracked-satnogs-search-input" type="text" placeholder="Or look up on SatNOGS (db.satnogs.org)..." autocomplete="off" />
+          <div id="tracked-satnogs-search-results" class="search-results" style="display: none;"></div>
+        </div>
       </div>
 
       <div id="tracked-edit-view" style="display: none;"></div>
@@ -111,15 +118,17 @@
       </div>
       <p class="hint">
         Fixed az/el positions you point the dish at by hand -- never picked up by the Pass
-        Orchestrator's scheduling, only triggered here. Optionally launch a standalone app profile
-        alongside the move.
+        Orchestrator's scheduling, only triggered here. "Go" moves the rotator once and, if any
+        downlink below is enabled and has an app, launches that one (first enabled wins, same as
+        Tracked Satellites) -- the app must be a "standalone" profile, since nothing here is
+        pass-triggered.
       </p>
 
       <div id="positions-list-view">
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Name</th><th>Az / El</th><th>App</th><th></th><th></th></tr>
+              <tr><th>Name</th><th>Az / El</th><th>Downlinks</th><th></th><th></th></tr>
             </thead>
             <tbody id="positions-table-body"></tbody>
           </table>
@@ -151,9 +160,11 @@
       </div>
       <p class="hint">
         A "pass"-mode profile is launched by the Pass Orchestrator when its satellite is in range,
-        and needs <code>{frequency}</code>. A "standalone" profile has nothing to do with any
-        satellite -- start/stop it by hand, or set it to auto-repeat. Other placeholders filled in
-        at launch: <code>{output_dir}</code>, <code>{source}</code>, <code>{source_id}</code>,
+        and needs <code>{frequency}</code> (alias <code>{down_frequency}</code>) -- plus
+        <code>{up_frequency}</code> if the triggering downlink has an associated uplink set (e.g. a
+        transponder/repeater pair). A "standalone" profile has nothing to do with any satellite --
+        start/stop it by hand, or set it to auto-repeat. Other placeholders filled in at launch:
+        <code>{output_dir}</code>, <code>{source}</code>, <code>{source_id}</code>,
         <code>{samplerate}</code>, <code>{timestamp}</code> (fresh per run -- use it in an output
         path so consecutive runs don't overwrite each other).
       </p>

@@ -27,9 +27,21 @@ from parkes.tracking.tracked_objects import (
 router = APIRouter(prefix="/api/orchestrator", tags=["orchestrator"])
 
 
+# Uplink is a field on the downlink it's paired with (e.g. a transponder or
+# repeater's up/down pair), not a separate list -- Parkes doesn't care
+# whether the launched app receives, transmits, or both, it just fills in
+# command placeholders (see resolve_command in sdr/app_profiles.py). None
+# means this downlink has no associated uplink. When set, the app profile
+# command can reference {up_frequency}; {frequency}/{down_frequency} are
+# always aliases for the same value (see PassOrchestrator._run_pass).
 class DownlinkRequest(BaseModel):
     frequency: float
+    up_frequency: float | None = None
     app: str | None = None
+    description: str | None = None
+    mode: str | None = None
+    baud: float | None = None
+    enabled: bool = True
 
 
 class MoveObjectRequest(BaseModel):
@@ -72,8 +84,11 @@ class UpsertStaticPositionRequest(BaseModel):
     lat: float | None = None
     lon: float | None = None
     alt_m: float = 0.0
-    app: str | None = None
-    frequency: float | None = None
+    # Same shape as a tracked object's downlinks (see DownlinkRequest) --
+    # "Go" launches the first enabled entry's app, if any (see
+    # go_static_position()). The app must be "standalone"-mode, since a
+    # static position is never pass-triggered.
+    downlinks: list[DownlinkRequest] = []
 
 
 def _orchestrator(request: Request) -> PassOrchestrator:
@@ -238,6 +253,31 @@ def _effective_azel(position: dict, sky: SkyTracker) -> tuple[float, float]:
     return position["az"], position["el"]
 
 
+def _effective_downlinks(position: dict) -> list[dict]:
+    """Positions saved before the downlinks-list format (a single
+    app/frequency pair) are migrated on the fly into one entry, so they
+    keep working exactly as before until next opened and saved through
+    the new editor -- same reasoning as _effective_azel, just for the
+    app/frequency side instead of the position side."""
+    if "downlinks" in position:
+        return position["downlinks"]
+    frequency = position.get("frequency")
+    app = position.get("app")
+    if frequency is None and not app:
+        return []
+    return [
+        {
+            "frequency": frequency or 0,
+            "up_frequency": None,
+            "app": app,
+            "description": None,
+            "mode": None,
+            "baud": None,
+            "enabled": True,
+        }
+    ]
+
+
 @router.get("/static_positions/compute_azel")
 def compute_static_position_azel(lat: float, lon: float, request: Request, alt_m: float = 0.0):
     """Live az/el preview for the lat/lon/alt editor -- doesn't touch
@@ -252,6 +292,7 @@ def get_static_positions(request: Request):
     sky = request.app.state.sky
     for position in positions.values():
         position["az"], position["el"] = _effective_azel(position, sky)
+        position["downlinks"] = _effective_downlinks(position)
     return positions
 
 
@@ -277,6 +318,15 @@ def delete_static_position_route(position_id: str):
     return {"status": "ok"}
 
 
+def _active_downlink(position: dict) -> dict | None:
+    """Same "first enabled wins" convention as PassOrchestrator's own
+    downlink selection (see _candidate_passes/_rank) -- there's no AOS/
+    priority competition for a static position, but reusing it keeps
+    "which one is active" predictable and consistent with Tracked
+    Satellites."""
+    return next((d for d in _effective_downlinks(position) if d.get("enabled", True)), None)
+
+
 @router.post("/static_positions/{position_id}/go")
 async def go_static_position(position_id: str, request: Request):
     position = load_static_positions().get(position_id)
@@ -287,11 +337,14 @@ async def go_static_position(position_id: str, request: Request):
         await request.app.state.rotator.set_position(az, el)
     except (RotctldError, ConnectionError, OSError) as exc:
         raise HTTPException(502, str(exc)) from exc
-    app_id = position.get("app")
+    active = _active_downlink(position)
+    app_id = active.get("app") if active else None
     if app_id:
         standalone = _standalone(request)
         if not standalone.running(app_id):
-            overrides = {"frequency": position["frequency"]} if position.get("frequency") else {}
+            overrides = {"frequency": active["frequency"], "down_frequency": active["frequency"]}
+            if active.get("up_frequency"):
+                overrides["up_frequency"] = active["up_frequency"]
             try:
                 await standalone.start(app_id, **overrides)
             except KeyError as exc:
@@ -306,7 +359,8 @@ async def stop_static_position(position_id: str, request: Request):
     position = load_static_positions().get(position_id)
     if position is None:
         raise HTTPException(404, f"unknown static position: {position_id}")
-    app_id = position.get("app")
+    active = _active_downlink(position)
+    app_id = active.get("app") if active else None
     if app_id:
         await _standalone(request).stop(app_id)
     return {"status": "ok"}
