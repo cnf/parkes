@@ -41,6 +41,15 @@ class DownlinkRequest(BaseModel):
     description: str | None = None
     mode: str | None = None
     baud: float | None = None
+    # Both optional, per-downlink SDR overrides -- available to an app
+    # profile's command as {gain}/{bias} (see resolve_command). gain unset
+    # behaves like up_frequency unset: a command that references {gain}
+    # without one raises KeyError and the app just doesn't launch for that
+    # pass. bias always resolves to "--bias" or "" (never missing), since
+    # "no bias tee" needs to be the normal, silent case, not a
+    # misconfiguration.
+    gain: float | None = None
+    bias: bool = False
     enabled: bool = True
 
 
@@ -273,6 +282,8 @@ def _effective_downlinks(position: dict) -> list[dict]:
             "description": None,
             "mode": None,
             "baud": None,
+            "gain": None,
+            "bias": False,
             "enabled": True,
         }
     ]
@@ -344,9 +355,15 @@ async def go_static_position(position_id: str, request: Request):
     if app_id:
         standalone = _standalone(request)
         if not standalone.running(app_id):
-            overrides = {"frequency": active["frequency"], "down_frequency": active["frequency"]}
+            overrides = {
+                "frequency": active["frequency"],
+                "down_frequency": active["frequency"],
+                "bias": "--bias" if active.get("bias") else "",
+            }
             if active.get("up_frequency"):
                 overrides["up_frequency"] = active["up_frequency"]
+            if active.get("gain") is not None:
+                overrides["gain"] = active["gain"]
             try:
                 await standalone.start(app_id, **overrides)
             except KeyError as exc:

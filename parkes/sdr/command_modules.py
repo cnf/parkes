@@ -12,7 +12,13 @@ Field shape (all keys except "key"/"type"/"label" are optional):
   label         -- form label
   positional    -- True if this arg has no --flag and is emitted by
                    position (in field-list order) rather than by name
-  flag          -- e.g. "--source" (required for non-positional fields)
+  flag          -- e.g. "--source" -- emits "--flag value" as two tokens.
+                   Omit entirely (on a non-positional, non-checkbox field)
+                   for a single raw token instead -- the field's whole
+                   value is the token, e.g. "bias" below, whose value is
+                   the placeholder "{bias}" that resolve_command expands
+                   to "--bias" or "" (dropped) depending on the triggering
+                   downlink's bias-tee toggle.
   default       -- prefilled value
   default_by_profile_mode -- {"pass": ..., "standalone": ...}, overrides
                    `default` based on the *profile's* mode (not this
@@ -119,6 +125,13 @@ SATDUMP_MODULE = {
                     "unit": "Hz",
                     "optional": True,
                 },
+                {
+                    "key": "bias",
+                    "label": "Bias tee",
+                    "type": "text",
+                    "default_by_profile_mode": {"pass": "{bias}", "standalone": ""},
+                    "optional": True,
+                },
             ],
         },
         {
@@ -208,6 +221,32 @@ SATDUMP_MODULE = {
                     "type": "text",
                     "flag": "--frequency",
                     "default_by_profile_mode": {"pass": "{frequency}", "standalone": ""},
+                },
+                {
+                    "key": "gain",
+                    "label": "Gain",
+                    "type": "text",
+                    "flag": "--gain",
+                    "optional": True,
+                },
+                {
+                    "key": "dc_block",
+                    "label": "DC block",
+                    "type": "checkbox",
+                    "flag": "--dc_block",
+                },
+                {
+                    "key": "iq_swap",
+                    "label": "IQ swap",
+                    "type": "checkbox",
+                    "flag": "--iq_swap",
+                },
+                {
+                    "key": "bias",
+                    "label": "Bias tee",
+                    "type": "text",
+                    "default_by_profile_mode": {"pass": "{bias}", "standalone": ""},
+                    "optional": True,
                 },
                 {
                     "key": "baseband_format",

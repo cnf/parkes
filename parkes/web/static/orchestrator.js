@@ -204,7 +204,11 @@
       if (field.type === "checkbox") {
         if (value) command.push(field.flag);
       } else if (value !== undefined && value !== null && String(value).trim() !== "") {
-        command.push(field.flag, String(value));
+        // No "flag" -- the field's whole value is one raw token (e.g.
+        // "bias", whose value is the "{bias}" placeholder itself), instead
+        // of the usual "--flag value" pair.
+        if (field.flag) command.push(field.flag, String(value));
+        else command.push(String(value));
       }
     }
     command.push(...extraArgs);
@@ -1073,6 +1077,8 @@
         description: downlink.description || null,
         mode: downlink.mode || null,
         baud: downlink.baud ?? null,
+        gain: downlink.gain ?? null,
+        bias: downlink.bias === true,
         enabled: downlink.enabled !== false,
       })),
     };
@@ -1371,6 +1377,30 @@
       });
       detailsRow.appendChild(labeledField("Baud", baudInput, "downlink-baud-field"));
 
+      const gainInput = document.createElement("input");
+      gainInput.type = "number";
+      gainInput.step = "any";
+      gainInput.className = "downlink-gain";
+      gainInput.value = link.gain ?? "";
+      gainInput.placeholder = "gain";
+      gainInput.title = "SDR gain override for this downlink -- {gain} (only takes effect if the app profile's command references it)";
+      gainInput.addEventListener("input", () => {
+        link.gain = gainInput.value === "" ? null : Number(gainInput.value);
+      });
+      detailsRow.appendChild(labeledField("Gain", gainInput, "downlink-gain-field"));
+
+      const biasLabel = document.createElement("label");
+      biasLabel.className = "downlink-bias-field";
+      const biasInput = document.createElement("input");
+      biasInput.type = "checkbox";
+      biasInput.checked = link.bias === true;
+      biasInput.title = "Power the SDR's bias tee (e.g. for an LNA) while this downlink is active -- {bias}";
+      biasInput.addEventListener("change", () => {
+        link.bias = biasInput.checked;
+      });
+      biasLabel.append(biasInput, document.createTextNode(" Bias tee"));
+      detailsRow.appendChild(biasLabel);
+
       const appSelect = document.createElement("select");
       appSelect.title = "App profile to launch";
       const noneOpt = document.createElement("option");
@@ -1445,6 +1475,8 @@
         description: "",
         mode: "",
         baud: null,
+        gain: null,
+        bias: false,
         enabled: true,
       });
       renderTrackedEdit();
@@ -1691,6 +1723,8 @@
         description: downlink.description || "",
         mode: downlink.mode || "",
         baud: downlink.baud ?? null,
+        gain: downlink.gain ?? null,
+        bias: downlink.bias === true,
         enabled: downlink.enabled !== false,
       })),
     }));
@@ -1793,6 +1827,8 @@
         description: d.description || "",
         mode: d.mode || "",
         baud: d.baud ?? null,
+        gain: d.gain ?? null,
+        bias: d.bias === true,
         enabled: d.enabled !== false,
       })),
     }));
@@ -1825,6 +1861,8 @@
         description: d.description || null,
         mode: d.mode || null,
         baud: d.baud ?? null,
+        gain: d.gain ?? null,
+        bias: d.bias === true,
         enabled: d.enabled !== false,
       })),
       ...(position.positionMode === "latlon"
@@ -2140,6 +2178,8 @@
         description: "",
         mode: "",
         baud: null,
+        gain: null,
+        bias: false,
         enabled: true,
       });
       renderPositionEdit();

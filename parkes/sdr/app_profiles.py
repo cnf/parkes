@@ -94,6 +94,11 @@ def resolve_command(command: list[str], **overrides) -> list[str]:
     it's meant to be used in an output path/filename (e.g.
     "{output_dir}/{timestamp}") so consecutive runs of the same profile
     don't overwrite each other's output.
+
+    A token that resolves to the empty string is dropped entirely rather
+    than passed through as a stray empty arg -- e.g. {bias}, which a
+    downlink override resolves to "--bias" or "" depending on whether its
+    bias-tee toggle is on (see PassOrchestrator._run_pass/go_static_position).
     """
     prefs = preferences.get_all()
     values = {
@@ -104,4 +109,5 @@ def resolve_command(command: list[str], **overrides) -> list[str]:
         "timestamp": datetime.now(UTC).strftime("%Y%m%d_%H%M%S"),
         **overrides,
     }
-    return [part.format(**values) for part in command]
+    resolved = [part.format(**values) for part in command]
+    return [part for part in resolved if part != ""]
