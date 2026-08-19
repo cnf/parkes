@@ -219,9 +219,12 @@ class PassOrchestrator:
                 overrides = {
                     "frequency": downlink["frequency"],
                     "down_frequency": downlink["frequency"],
+                    "bias": "--bias" if downlink.get("bias") else "",
                 }
                 if downlink.get("up_frequency"):
                     overrides["up_frequency"] = downlink["up_frequency"]
+                if downlink.get("gain") is not None:
+                    overrides["gain"] = downlink["gain"]
                 command = resolve_command(profile["command"], **overrides)
             except (KeyError, IndexError) as exc:
                 logger.warning("orchestrator: bad app profile %r: %s", profile_name, exc)

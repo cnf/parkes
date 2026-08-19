@@ -11,6 +11,7 @@
     gpsd
     socat
     ruff
+    gh
   ];
 
   languages.python = {
