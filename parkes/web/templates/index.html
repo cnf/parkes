@@ -43,10 +43,32 @@
     </style>
 {% endblock %}
 
+{% block body_class %}dashboard-page{% endblock %}
+
+{% block nav_extra %}
+        <button id="edit-layout-btn" class="back-link" type="button" title="Edit dashboard layout">&#9998;</button>
+{% endblock %}
+
 {% block content %}
-    <div class="page-grid">
-    <div class="page-col">
-    <section class="card">
+    <div id="dashboard-edit-toolbar" class="dashboard-edit-toolbar" style="display: none;">
+      <div class="dashboard-edit-toolbar-controls">
+        <label id="dashboard-columns-field" class="columns-field">Columns
+          <select id="dashboard-columns-select">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+        <label class="width-toggle"><input type="checkbox" id="width-toggle-input" /> Full width</label>
+      </div>
+      <div class="row">
+        <button id="layout-editor-save-btn" class="primary" type="button">Save layout</button>
+        <button id="layout-editor-cancel-btn" type="button">Cancel</button>
+      </div>
+    </div>
+
+    <div class="page-grid" id="dashboard-grid">
+    <section class="card" data-widget-id="rotator">
       <div class="card-header">
         <h2>Rotator</h2>
         <span class="status-pill"><span class="status-dot" id="rotator-dot"></span><span id="rotator-status"></span></span>
@@ -97,7 +119,7 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" data-widget-id="orchestrator">
       <div class="card-header">
         <h2>Pass Orchestrator</h2>
         <span class="status-pill"><span class="status-dot" id="orchestrator-dot"></span><span id="orchestrator-status"></span></span>
@@ -110,10 +132,8 @@
         <a href="/orchestrator" class="back-link">Manage orchestrator &rarr;</a>
       </div>
     </section>
-    </div>
 
-    <div class="page-col">
-    <section class="card">
+    <section class="card" data-widget-id="tracking">
       <div class="card-header">
         <h2>Sky Tracking</h2>
         <span class="status-pill"><span class="status-dot" id="tracking-dot"></span><span id="tracking-status"></span></span>
@@ -130,7 +150,7 @@
       </table>
     </section>
 
-    <section class="card" id="pass-plot-card">
+    <section class="card" id="pass-plot-card" data-widget-id="pass-plot">
       <div class="card-header">
         <h2>Pass Plot</h2>
         <span class="status-pill"><span id="pass-plot-target">--</span></span>
@@ -176,10 +196,8 @@
       </div>
       <p class="hint" id="pass-plot-empty" style="display: none;">No upcoming passes.</p>
     </section>
-    </div>
-    </div>
 
-    <section class="card" id="world-map-card">
+    <section class="card" id="world-map-card" data-widget-id="world-map" data-widget-label="World Map">
       <div class="world-map-wrap">
         <svg viewBox="-180 -90 360 180" id="world-map-svg">
           <rect class="wm-ocean" x="-180" y="-90" width="360" height="180" />
@@ -195,9 +213,11 @@
         </svg>
       </div>
     </section>
+    </div>
 {% endblock %}
 
 {% block scripts %}
+    <script src="/static/dashboard-layout.js"></script>
     <script src="/static/rotator.js"></script>
     <script src="/static/tracking.js"></script>
     <script src="/static/pass-plot.js"></script>

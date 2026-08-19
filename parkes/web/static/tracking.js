@@ -110,7 +110,7 @@
         <td>${target.el.toFixed(1)}&deg;</td>
         <td><span class="badge ${target.visible ? "up" : "down"}">${target.visible ? "up" : "down"}</span></td>
         <td>${formatPass(target)}</td>
-        <td><button class="btn-sm primary" ${target.visible ? "" : "disabled"} data-target="${escapeHtml(target.id)}">Track</button></td>
+        <td><button class="btn-sm primary btn-icon" ${target.visible ? "" : "disabled"} data-target="${escapeHtml(target.id)}" title="Track" aria-label="Track">&#127919;</button></td>
       `;
       targetsBody.appendChild(row);
     }
@@ -134,7 +134,7 @@
         <td>${position.el.toFixed(1)}&deg;</td>
         <td class="hint">fixed</td>
         <td></td>
-        <td><button class="btn-sm" data-position="${escapeHtml(position.id)}">Go</button></td>
+        <td><button class="btn-sm btn-icon" data-position="${escapeHtml(position.id)}" title="Go" aria-label="Go">&#9211;</button></td>
       `;
       targetsBody.appendChild(row);
     }

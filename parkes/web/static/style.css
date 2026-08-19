@@ -35,30 +35,67 @@ body {
   padding: 2rem 1.25rem 4rem;
   line-height: 1.45;
 }
+/* Dashboard-only override for the width preference -- other pages always
+   keep the constrained width above, since full width looks odd on their
+   single-column layouts. */
+body.dashboard-page.full-width { max-width: none; }
 
-/* Two independent columns, each stacking its own cards top to bottom --
-   unlike a grid's row-major placement, a tall card in one column (Sky
-   Tracking's satellite table, say) never pushes down cards in the other
-   column, since each .page-col's height is its own. Collapses to a single
-   stacked column on narrow viewports. */
+/* User-editable grid: widget cards carry a span-N class and their DOM
+   order is the display order, both set by dashboard-layout.js from the
+   saved layout preference. Auto-flow places them from that alone -- no
+   explicit grid-row/grid-column-start bookkeeping needed. Mobile-first: a
+   single column is the baseline, and the cols-2/cols-3/cols-4 modifier
+   (chosen by the user, applied by JS) only takes over at 60rem+ -- below,
+   dashboard-layout.js switches to the separate narrow layout entirely, so
+   there's nothing here to override. align-items: start keeps a card at
+   its own natural height instead of Grid's default row-stretch, which
+   otherwise pads a shorter card out to match a taller neighbour. */
 .page-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
   gap: 1.5rem;
-  align-items: flex-start;
   margin-bottom: 1.5rem;
 }
-.page-col {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  flex: 1 1 28rem;
-  min-width: 0;
-}
-.page-col > .card { margin-bottom: 0; }
+.page-grid > .card { margin-bottom: 0; }
+.page-grid > .card.widget-hidden { display: none; }
+/* While editing, a hidden card stays visible (dimmed) so its bar remains
+   reachable to un-hide it -- higher specificity than the rule above, wins
+   regardless of source order. */
+.page-grid.editing > .card.widget-hidden { display: block; opacity: 0.45; }
 
-@media (max-width: 60rem) {
-  .page-grid { flex-direction: column; }
+@media (min-width: 60rem) {
+  .page-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .page-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .page-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .page-grid.cols-2 > .card.span-2, .page-grid.cols-3 > .card.span-2, .page-grid.cols-4 > .card.span-2 { grid-column: span 2; }
+  .page-grid.cols-3 > .card.span-3, .page-grid.cols-4 > .card.span-3 { grid-column: span 3; }
+  .page-grid.cols-4 > .card.span-4 { grid-column: span 4; }
 }
+
+#edit-layout-btn { font-size: 1rem; line-height: 1; }
+#edit-layout-btn.active { color: var(--accent); }
+
+.dashboard-edit-toolbar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+  padding: 0.7rem 0.9rem; margin-bottom: 1.25rem;
+}
+.dashboard-edit-toolbar-controls { display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
+.columns-field { flex-direction: row; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-muted); }
+.columns-field select { width: auto; }
+.width-toggle { display: flex; flex-direction: row; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-muted); }
+.width-toggle input { width: auto; }
+
+.card-edit-bar {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.35rem 0.5rem; margin-bottom: 0.9rem; font-size: 0.8rem;
+}
+.card-edit-name { flex: 1; font-weight: 600; color: var(--text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-edit-bar select { width: auto; font-size: 0.8rem; padding: 0.2rem 0.4rem; }
+.card-edit-hidden { flex-direction: row; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--text-muted); }
+.card-edit-hidden input { width: auto; }
 
 header { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 1.75rem; }
 header .dots { display: inline-flex; gap: 0.3rem; }
@@ -132,6 +169,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
 button.primary:disabled { opacity: 0.35; }
 button.btn-sm { padding: 0.25rem 0.65rem; font-size: 0.8rem; }
+button.btn-icon { padding: 0.2rem 0.5rem; font-size: 0.95rem; line-height: 1; }
 button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 button.danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 button.danger:disabled { opacity: 0.35; }
@@ -276,7 +314,7 @@ tr:last-child td { border-bottom: none; }
 .countdown-lab { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .max-el-note { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
 
-.world-map-wrap { width: 100%; max-width: 50rem; margin: 0 auto; }
+.world-map-wrap { width: 100%; }
 .world-map-wrap svg { width: 100%; height: auto; display: block; }
 .world-map-wrap .wm-ocean { fill: var(--bg); }
 .world-map-wrap .wm-border { fill: none; stroke: var(--border); stroke-width: 0.6; }

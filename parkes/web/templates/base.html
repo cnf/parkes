@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/static/style.css" />
     {% block styles %}{% endblock %}
   </head>
-  <body>
+  <body class="{% block body_class %}{% endblock %}">
     <header>
       <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
       <a href="/" class="brand-link"><h1>{{ app_name }}</h1></a>
@@ -43,6 +43,7 @@
         {% for href, label in nav_items %}
           {% if href == request.url.path %}<span class="back-link current">{{ label }}</span>{% else %}<a href="{{ href }}" class="back-link">{{ label }}</a>{% endif %}
         {% endfor %}
+        {% block nav_extra %}{% endblock %}
       </nav>
     </header>
 

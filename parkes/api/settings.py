@@ -1,12 +1,23 @@
 from typing import Literal
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from parkes.config import settings
 from parkes.preferences import preferences
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+
+class DashboardWideWidgetLayout(BaseModel):
+    id: str
+    span: int = Field(ge=1, le=3)
+    hidden: bool = False
+
+
+class DashboardNarrowWidgetLayout(BaseModel):
+    id: str
+    hidden: bool = False
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -38,6 +49,10 @@ class UpdateSettingsRequest(BaseModel):
     gpsd_bind_host: str | None = None
     gpsd_managed: bool | None = None
     gpsd_device: str | None = None
+    dashboard_layout_wide: list[DashboardWideWidgetLayout] | None = None
+    dashboard_layout_narrow: list[DashboardNarrowWidgetLayout] | None = None
+    dashboard_columns: Literal[2, 3, 4] | None = None
+    dashboard_width: Literal["controlled", "full"] | None = None
 
 
 # Fields that InfraSupervisor's daemons are built from -- a save touching

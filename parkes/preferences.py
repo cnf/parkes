@@ -66,6 +66,37 @@ DEFAULTS: dict[str, Any] = {
     "gpsd_bind_host": settings.gpsd_bind_host,
     "gpsd_managed": settings.gpsd_managed,
     "gpsd_device": settings.gpsd_device,
+    # Dashboard-page layout editor state (index.html only). "id" values are
+    # the data-widget-id attributes on each <section class="card">, so
+    # adding a new widget card later needs no migration here --
+    # dashboard-layout.js appends any card missing from either list at
+    # render time. Two separate layouts because phone/tablet-portrait
+    # (narrow, below the 60rem breakpoint dashboard-layout.js and style.css
+    # both key off) doesn't have room for side-by-side cards or a
+    # meaningful span choice -- it's always a single column, so narrow
+    # entries carry no "span". "wide"/"columns" only matter above that
+    # breakpoint. List order is display order in the grid; "span" is
+    # 1-dashboard_columns; "hidden" toggles visibility.
+    "dashboard_layout_wide": [
+        {"id": "rotator", "span": 2, "hidden": False},
+        {"id": "orchestrator", "span": 1, "hidden": False},
+        {"id": "tracking", "span": 1, "hidden": False},
+        {"id": "pass-plot", "span": 2, "hidden": False},
+        {"id": "world-map", "span": 2, "hidden": False},
+    ],
+    "dashboard_layout_narrow": [
+        {"id": "rotator", "hidden": False},
+        {"id": "orchestrator", "hidden": False},
+        {"id": "tracking", "hidden": False},
+        {"id": "pass-plot", "hidden": False},
+        {"id": "world-map", "hidden": False},
+    ],
+    # How many grid columns the wide layout uses -- 2 or 3.
+    "dashboard_columns": 3,
+    # "controlled" keeps the site-wide 75rem max-width on the dashboard;
+    # "full" lets the dashboard grid use the full viewport width. Scoped to
+    # index.html only via body.dashboard-page -- see style.css.
+    "dashboard_width": "controlled",
 }
 
 
