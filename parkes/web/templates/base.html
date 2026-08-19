@@ -11,6 +11,10 @@
     <header>
       <span class="dots"><span class="dot"></span><span class="dot dot2"></span></span>
       <a href="/" class="brand-link"><h1>{{ app_name }}</h1></a>
+      <div class="header-meta">
+        <span id="header-clock" class="header-clock"></span>
+        <button id="location-btn" class="back-link" type="button">&#128205; --</button>
+      </div>
       <nav class="nav-links">
         <span class="header-status" id="header-status">
           <span class="header-status-item" id="header-rotator-status" title="Rotator: checking...">
@@ -39,9 +43,38 @@
         {% for href, label in nav_items %}
           {% if href == request.url.path %}<span class="back-link current">{{ label }}</span>{% else %}<a href="{{ href }}" class="back-link">{{ label }}</a>{% endif %}
         {% endfor %}
-        {% block nav_extra %}{% endblock %}
       </nav>
     </header>
+
+    <div id="location-modal-overlay" class="modal-overlay">
+      <div class="modal-dialog">
+        <div class="card-header">
+          <h2>Observer Location</h2>
+          <button id="location-modal-close" type="button" class="btn-sm">&times;</button>
+        </div>
+        <div class="modal-mode-row">
+          <label><input type="radio" name="location-mode" id="location-mode-default" /> Default</label>
+          <label><input type="radio" name="location-mode" id="location-mode-manual" /> Manual</label>
+          <label><input type="radio" name="location-mode" id="location-mode-gpsd" /> GPS (gpsd)</label>
+        </div>
+        <p class="hint" id="location-default-hint"></p>
+        <div class="location-fields" id="location-manual-fields">
+          <label>Latitude <input id="location-manual-lat" type="number" step="0.0001" /></label>
+          <label>Longitude <input id="location-manual-lon" type="number" step="0.0001" /></label>
+          <label>Elevation (m) <input id="location-manual-elev" type="number" step="1" /></label>
+        </div>
+        <p class="hint" id="location-geocode-hint">&nbsp;</p>
+        <p class="hint" id="location-gpsd-hint" style="display: none;"></p>
+        <div class="row" style="margin-top: 0.6rem;">
+          <button id="location-use-browser-btn" type="button" class="btn-sm">&#128205; Use my location</button>
+        </div>
+        <p class="hint" id="location-status"></p>
+        <div class="row" style="margin-top: 1rem;">
+          <button id="location-save-btn" class="primary" type="button">Save</button>
+          <button id="location-cancel-btn" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
 
     {% block content %}{% endblock %}
 
@@ -49,6 +82,7 @@
     <script src="/static/bands.js"></script>
     <script src="/static/freq-tooltip.js"></script>
     <script src="/static/header-status.js"></script>
+    <script src="/static/location.js"></script>
     {% block scripts %}{% endblock %}
   </body>
 </html>

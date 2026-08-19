@@ -72,6 +72,15 @@ header p { margin: 0; color: var(--text-muted); font-size: 0.85rem; }
 .back-link { color: var(--text-muted); font-size: 0.85rem; text-decoration: none; }
 .back-link:hover { color: var(--accent2); }
 .back-link.current { color: var(--text); font-weight: 600; }
+button.back-link { background: none; border: none; padding: 0; cursor: pointer; font: inherit; font-size: 0.85rem; }
+
+/* Sits right after the title, left-aligned with it -- margin-left gives it
+   its own breathing room beyond header's base gap, so it doesn't read as
+   glued to "Parkes". Time is the observer location's, not the browser's:
+   the whole point is knowing what time it is at the dish when you're
+   controlling it from somewhere else. */
+.header-meta { display: flex; align-items: center; gap: 0.7rem; margin-left: 0.5rem; }
+.header-clock { color: var(--text-muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 
 .header-status { display: inline-flex; gap: 0.55rem; align-items: center; padding-right: 0.2rem; border-right: 1px solid var(--border); margin-right: 0.2rem; }
 .header-status-icon { width: 1.05rem; height: 1.05rem; display: block; color: var(--text-muted); transition: color 0.2s; }
@@ -194,6 +203,12 @@ tr:last-child td { border-bottom: none; }
    which was flipping the dialog into a scrolling container (and jumping
    the scroll position) the instant a search produced results. */
 .modal-dialog.modal-lg { max-width: 42rem; overflow: visible; }
+
+.modal-mode-row { display: flex; gap: 1.2rem; margin: 0.8rem 0 1rem; }
+.modal-mode-row label { display: flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.9rem; }
+.modal-mode-row input[type="radio"] { width: auto; accent-color: var(--accent); }
+.location-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
+.location-fields input:disabled { opacity: 0.5; }
 
 .satnogs-tooltip {
   position: fixed; z-index: 200; max-width: 18rem;

@@ -15,6 +15,7 @@
   const gpsdHint = document.getElementById("location-gpsd-hint");
   const useBrowserBtn = document.getElementById("location-use-browser-btn");
   const statusEl = document.getElementById("location-status");
+  const clockEl = document.getElementById("header-clock");
 
   async function apiFetch(path, options) {
     const res = await fetch(path, options);
@@ -40,6 +41,41 @@
     } catch {
       return null;
     }
+  }
+
+  // Local time *at the observer location*, not the browser's -- the point
+  // is knowing what time it is at the dish when controlling it remotely.
+  // Resolving lat/lon to an IANA zone only needs to happen when the
+  // location changes; a plain interval reformats "now" in that zone every
+  // tick, no refetch needed.
+  let clockTimezone = null;
+
+  function updateClockDisplay() {
+    if (!clockEl) return;
+    if (!clockTimezone) {
+      clockEl.textContent = "";
+      return;
+    }
+    try {
+      clockEl.textContent = new Intl.DateTimeFormat([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: clockTimezone,
+      }).format(new Date());
+    } catch {
+      clockEl.textContent = "";
+    }
+  }
+
+  async function refreshClockTimezone(lat, lon) {
+    try {
+      const data = await apiFetch(`/api/tracking/timezone?lat=${lat}&lon=${lon}`);
+      clockTimezone = data.timezone;
+    } catch {
+      clockTimezone = null;
+    }
+    updateClockDisplay();
   }
 
   function applyMode() {
@@ -72,6 +108,7 @@
     const { lat, lon } = data.effective_location;
     locationBtn.textContent = `\u{1F4CD} ${lat.toFixed(2)}, ${lon.toFixed(2)}`;
     locationBtn.title = "";
+    refreshClockTimezone(lat, lon);
     const label = await geocodeLabel(lat, lon);
     if (label) locationBtn.title = label;
   }
@@ -190,4 +227,5 @@
   });
 
   refreshButtonLabel();
+  setInterval(updateClockDisplay, 15000);
 })();

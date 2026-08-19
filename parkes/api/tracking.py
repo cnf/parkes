@@ -8,6 +8,7 @@ from parkes.tracking.geocode import reverse_geocode
 from parkes.tracking.groups import GroupStore
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
+from parkes.tracking.timezone_lookup import resolve_timezone
 from parkes.tracking.tle import TleCatalog
 from parkes.tracking.tle_sources import TleSourceStore
 
@@ -68,6 +69,11 @@ def _sources(request: Request) -> TleSourceStore:
 @router.get("/reverse_geocode")
 async def reverse_geocode_endpoint(lat: float, lon: float):
     return {"label": await asyncio.to_thread(reverse_geocode, lat, lon)}
+
+
+@router.get("/timezone")
+async def timezone_endpoint(lat: float, lon: float):
+    return {"timezone": await asyncio.to_thread(resolve_timezone, lat, lon)}
 
 
 @router.get("/targets")
