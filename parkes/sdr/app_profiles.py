@@ -99,6 +99,12 @@ def resolve_command(command: list[str], **overrides) -> list[str]:
     than passed through as a stray empty arg -- e.g. {bias}, which a
     downlink override resolves to "--bias" or "" depending on whether its
     bias-tee toggle is on (see PassOrchestrator._run_pass/go_static_position).
+    If the token right before it looks like a flag (starts with "-"), that's
+    dropped too, so e.g. "--source_id {source_id}" with source_id unset
+    (a real, already-possible case -- see api/orchestrator.py's {source_id}
+    placeholder) cleanly disappears instead of leaving "--source_id"
+    dangling with no value, which would otherwise eat whatever token
+    happens to follow it.
     """
     prefs = preferences.get_all()
     values = {
@@ -110,4 +116,11 @@ def resolve_command(command: list[str], **overrides) -> list[str]:
         **overrides,
     }
     resolved = [part.format(**values) for part in command]
-    return [part for part in resolved if part != ""]
+    result: list[str] = []
+    for part in resolved:
+        if part == "":
+            if result and result[-1].startswith("-"):
+                result.pop()
+            continue
+        result.append(part)
+    return result

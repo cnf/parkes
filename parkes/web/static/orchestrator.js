@@ -1385,7 +1385,10 @@
       gainInput.placeholder = "gain";
       gainInput.title = "SDR gain override for this downlink -- {gain} (only takes effect if the app profile's command references it)";
       gainInput.addEventListener("input", () => {
-        link.gain = gainInput.value === "" ? null : Number(gainInput.value);
+        // A partial/invalid number while typing (e.g. a bare "-" before the
+        // digits, or mid-exponent) shouldn't leave link.gain holding NaN.
+        const parsed = Number(gainInput.value);
+        link.gain = gainInput.value === "" || !Number.isFinite(parsed) ? null : parsed;
       });
       detailsRow.appendChild(labeledField("Gain", gainInput, "downlink-gain-field"));
 
