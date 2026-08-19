@@ -260,3 +260,27 @@ tr:last-child td { border-bottom: none; }
 .countdown { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent2); }
 .countdown-lab { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .max-el-note { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
+
+.world-map-wrap { width: 100%; max-width: 50rem; margin: 0 auto; }
+.world-map-wrap svg { width: 100%; height: auto; display: block; }
+.world-map-wrap .wm-ocean { fill: var(--bg); }
+.world-map-wrap .wm-border { fill: none; stroke: var(--border); stroke-width: 0.6; }
+.world-map-wrap .wm-land { fill: var(--border); stroke: var(--text-muted); stroke-width: 0.25; }
+.world-map-wrap .wm-graticule { stroke: var(--border); stroke-width: 0.25; }
+.world-map-wrap .wm-graticule-label {
+  fill: var(--text-muted); font-size: 4.5px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.world-map-wrap .wm-track { fill: none; stroke: var(--accent2); stroke-width: 0.6; opacity: 0.85; }
+.world-map-wrap .wm-footprint { fill: var(--accent); fill-opacity: 0.07; stroke: var(--accent); stroke-width: 0.35; stroke-dasharray: 1.4 1; opacity: 0.75; }
+.world-map-wrap .wm-subpoint { fill: var(--accent); stroke: var(--surface); stroke-width: 0.4; }
+.world-map-wrap .wm-subpoint-label {
+  fill: var(--text); font-size: 5px; font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.world-map-wrap .wm-observer { fill: var(--accent2); stroke: var(--surface); stroke-width: 0.4; }
+.world-map-wrap .wm-observer-label {
+  fill: var(--accent2); font-size: 5px; font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.world-map-wrap .wm-next-label {
+  fill: var(--success); font-size: 6px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}

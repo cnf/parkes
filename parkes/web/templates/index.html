@@ -189,6 +189,23 @@
     </div>
     </div>
 
+    <section class="card" id="world-map-card">
+      <div class="world-map-wrap">
+        <svg viewBox="-180 -90 360 180" id="world-map-svg">
+          <rect class="wm-ocean" x="-180" y="-90" width="360" height="180" />
+          <g id="world-map-graticule"></g>
+          <path class="wm-land" id="world-map-land" d="" />
+          <g id="world-map-footprints"></g>
+          <g id="world-map-tracks"></g>
+          <g id="world-map-subpoints"></g>
+          <circle class="wm-observer" id="world-map-observer" r="1.7" cx="0" cy="0" style="display: none;" />
+          <text class="wm-observer-label" id="world-map-observer-label" style="display: none;"></text>
+          <rect class="wm-border" x="-180" y="-90" width="360" height="180" />
+          <text class="wm-next-label" id="world-map-next" x="177" y="-83" text-anchor="end">--</text>
+        </svg>
+      </div>
+    </section>
+
     <div id="location-modal-overlay" class="modal-overlay">
       <div class="modal-dialog">
         <div class="card-header">
@@ -224,6 +241,7 @@
     <script src="/static/rotator.js"></script>
     <script src="/static/tracking.js"></script>
     <script src="/static/pass-plot.js"></script>
+    <script src="/static/world-map.js"></script>
     <script src="/static/orchestrator-status.js"></script>
     <script src="/static/location.js"></script>
 {% endblock %}

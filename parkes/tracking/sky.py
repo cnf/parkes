@@ -1,3 +1,4 @@
+import math
 from datetime import timedelta
 from pathlib import Path
 
@@ -12,9 +13,42 @@ from parkes.tracking.tle import TleCatalog
 
 _BODIES = {"Sun": "sun", "Moon": "moon"}
 
+# Mean Earth radius, not WGS84's equatorial radius -- the footprint circle
+# is a rough visualization, not a navigation aid, and a single spherical
+# radius keeps _footprint_polygon() simple. The ~0.3% difference from the
+# equatorial radius is well under the line width it's drawn with.
+_EARTH_RADIUS_KM = 6371.0
+
 
 def _satellite_id(norad: int) -> str:
     return f"sat:{norad}"
+
+
+def _footprint_polygon(lat_deg: float, lon_deg: float, altitude_km: float, points: int) -> list[dict]:
+    """Polygon approximating the satellite's horizon circle on the ground
+    -- the boundary within which it's above 0 elevation somewhere -- via
+    the standard great-circle destination-point formula, walked around a
+    full bearing circle at the horizon's angular radius from the subpoint.
+    """
+    if altitude_km <= 0:
+        return []
+    lat1 = math.radians(lat_deg)
+    lon1 = math.radians(lon_deg)
+    gamma = math.acos(_EARTH_RADIUS_KM / (_EARTH_RADIUS_KM + altitude_km))
+    polygon = []
+    for i in range(points):
+        theta = 2 * math.pi * i / points
+        lat2 = math.asin(
+            math.sin(lat1) * math.cos(gamma) + math.cos(lat1) * math.sin(gamma) * math.cos(theta)
+        )
+        lon2 = lon1 + math.atan2(
+            math.sin(theta) * math.sin(gamma) * math.cos(lat1),
+            math.cos(gamma) - math.sin(lat1) * math.sin(lat2),
+        )
+        polygon.append(
+            {"lat": math.degrees(lat2), "lon": (math.degrees(lon2) + 540) % 360 - 180}
+        )
+    return polygon
 
 
 class SkyTracker:
@@ -313,6 +347,61 @@ class SkyTracker:
                     }
                 )
         return passes
+
+    def ground_tracks(
+        self,
+        track_minutes_past: float = 45.0,
+        track_minutes_future: float = 45.0,
+        track_steps: int = 60,
+        footprint_points: int = 72,
+    ) -> list[dict]:
+        """Ground track (lat/lon subpoint over time) and horizon footprint
+        for every enabled satellite, for the dashboard's world-map widget.
+        Unlike everything else in this file, this is about where the
+        satellite is over the Earth's surface, not what it looks like from
+        the observer -- so it doesn't depend on observer location at all.
+        """
+        t0 = self._timescale.now()
+        offsets_min = [
+            -track_minutes_past
+            + (track_minutes_past + track_minutes_future) * i / (track_steps - 1)
+            for i in range(track_steps)
+        ]
+        sample_times = self._timescale.tt_jd([t0.tt + m / 1440.0 for m in offsets_min])
+
+        results = []
+        for sat in self._enabled_satellites():
+            satellite = self._tle_catalog.get(sat["norad"])
+            if satellite is None:
+                continue
+
+            now_sub = wgs84.subpoint(satellite.at(t0))
+            altitude_km = float(now_sub.elevation.km)
+
+            track_sub = wgs84.subpoint(satellite.at(sample_times))
+            track = [
+                {"lat": float(lat), "lon": float(lon)}
+                for lat, lon in zip(
+                    track_sub.latitude.degrees, track_sub.longitude.degrees, strict=True
+                )
+            ]
+
+            results.append(
+                {
+                    "id": _satellite_id(sat["norad"]),
+                    "name": sat["name"],
+                    "subpoint": {
+                        "lat": float(now_sub.latitude.degrees),
+                        "lon": float(now_sub.longitude.degrees),
+                    },
+                    "altitude_km": altitude_km,
+                    "track": track,
+                    "footprint": _footprint_polygon(
+                        now_sub.latitude.degrees, now_sub.longitude.degrees, altitude_km, footprint_points
+                    ),
+                }
+            )
+        return results
 
     def upcoming_passes(self, min_elevation: float = 0.0) -> list[dict]:
         """next_pass() for every enabled satellite, soonest first, skipping

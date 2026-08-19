@@ -93,6 +93,11 @@ def pass_track(target_id: str, request: Request, min_elevation: float = 0.0, ste
     return track
 
 
+@router.get("/groundtracks")
+def ground_tracks(request: Request):
+    return _sky(request).ground_tracks()
+
+
 @router.get("/status")
 def status(request: Request):
     scheduler = _scheduler(request)
