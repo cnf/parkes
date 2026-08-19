@@ -233,3 +233,30 @@ tr:last-child td { border-bottom: none; }
   font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; margin-bottom: 0.3rem;
 }
 .freq-tooltip-hint { color: var(--text-muted); }
+
+.plot-layout { display: flex; gap: 2.5rem; align-items: center; flex-wrap: wrap; }
+.plot-wrap { position: relative; width: 17rem; height: 17rem; flex-shrink: 0; }
+.plot-wrap svg { width: 100%; height: 100%; display: block; }
+
+.plot-wrap .ring { fill: none; stroke: var(--border); stroke-width: 1; }
+.plot-wrap .ring-label { fill: var(--text-muted); font-size: 7px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.plot-wrap .crosshair { stroke: var(--border); stroke-width: 1; }
+.plot-wrap .cardinal-label { fill: var(--text-muted); font-size: 9px; font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+.plot-wrap .track-past { fill: none; stroke: var(--accent2); stroke-width: 2; stroke-dasharray: 3 3; opacity: 0.55; }
+.plot-wrap .track-future { fill: none; stroke: var(--accent2); stroke-width: 2; }
+.plot-wrap .now-marker { fill: var(--accent); stroke: var(--surface); stroke-width: 1.5; }
+.plot-wrap .now-marker-pulse { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: 0.5; }
+.plot-wrap .aos-marker { fill: var(--surface); stroke: var(--accent2); stroke-width: 1.5; }
+.plot-wrap .los-marker { fill: var(--text-muted); }
+
+.readout-stack { display: flex; flex-direction: column; gap: 0.55rem; min-width: 10rem; }
+.readout-stack .sat-name { font-size: 1.05rem; font-weight: 700; }
+.readout-row { display: flex; gap: 1.1rem; font-variant-numeric: tabular-nums; }
+.readout-row .val { font-size: 1.05rem; font-weight: 600; }
+.readout-row .unit { font-size: 0.78rem; color: var(--text-muted); font-weight: 400; }
+.readout-row .lab { display: block; font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.1rem; }
+
+.countdown { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent2); }
+.countdown-lab { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.max-el-note { font-size: 0.8rem; color: var(--text-muted); margin: 0; }

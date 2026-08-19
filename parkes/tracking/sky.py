@@ -173,6 +173,42 @@ class SkyTracker:
             raise KeyError(target_id)
         return satellite
 
+    def _pass_window(
+        self, target_id: str, min_elevation: float = 0.0, search_hours: float = 48.0
+    ):
+        """Shared AOS/LOS lookup behind next_pass() and pass_track() -- see
+        next_pass()'s docstring for what "synthesized"/"unbounded" mean.
+        Returns raw skyfield Time objects (rather than ISO strings) since
+        pass_track() needs to sample between them, not just report them.
+        Returns None under the same condition as next_pass(): the target
+        never reaches min_elevation anywhere in the search window.
+        """
+        satellite = self._find_satellite(target_id)
+        topos = self._current_topos()
+        t0 = self._timescale.now()
+        t1 = t0 + timedelta(hours=search_hours)
+        times, events = satellite.find_events(topos, t0, t1, altitude_degrees=min_elevation)
+
+        for i in range(len(events) - 2):
+            if events[i] == 0 and events[i + 1] == 1 and events[i + 2] == 2:
+                rise_time, culminate_time, set_time = times[i], times[i + 1], times[i + 2]
+                el, _az, _dist = (satellite - topos).at(culminate_time).altaz()
+                return rise_time, set_time, False, False, float(el.degrees)
+
+        current_el, _az, _dist = (satellite - topos).at(t0).altaz()
+        if current_el.degrees >= min_elevation:
+            set_time = None
+            max_elevation = current_el.degrees
+            for time, event in zip(times, events, strict=True):
+                if event == 1:
+                    el, _az, _dist = (satellite - topos).at(time).altaz()
+                    max_elevation = max(max_elevation, float(el.degrees))
+                elif event == 2:
+                    set_time = time
+                    break
+            return t0, (set_time or t1), True, set_time is None, max_elevation
+        return None
+
     def next_pass(
         self, target_id: str, min_elevation: float = 0.0, search_hours: float = 48.0
     ) -> dict | None:
@@ -201,41 +237,53 @@ class SkyTracker:
         Returns None only if the target isn't reachable at all in the
         window (never rises above min_elevation).
         """
+        result = self._pass_window(target_id, min_elevation, search_hours)
+        if result is None:
+            return None
+        aos_time, los_time, synthesized, unbounded, max_elevation = result
+        out = {"aos": aos_time.utc_iso(), "los": los_time.utc_iso(), "max_elevation": max_elevation}
+        if synthesized:
+            out["synthesized"] = True
+            out["unbounded"] = unbounded
+        return out
+
+    def pass_track(
+        self,
+        target_id: str,
+        min_elevation: float = 0.0,
+        search_hours: float = 48.0,
+        steps: int = 40,
+    ) -> dict | None:
+        """Az/el sampled at `steps` evenly-spaced points across the same
+        AOS-LOS window next_pass() would report (including its
+        "synthesized"/"unbounded" mid-pass cases), for plotting the
+        ground-track curve on a polar az/el widget. Returns None under the
+        same condition as next_pass(): no pass reaches min_elevation
+        anywhere in the search window.
+        """
+        result = self._pass_window(target_id, min_elevation, search_hours)
+        if result is None:
+            return None
+        aos_time, los_time, synthesized, unbounded, max_elevation = result
         satellite = self._find_satellite(target_id)
         topos = self._current_topos()
-        t0 = self._timescale.now()
-        t1 = t0 + timedelta(hours=search_hours)
-        times, events = satellite.find_events(topos, t0, t1, altitude_degrees=min_elevation)
-
-        for i in range(len(events) - 2):
-            if events[i] == 0 and events[i + 1] == 1 and events[i + 2] == 2:
-                rise_time, culminate_time, set_time = times[i], times[i + 1], times[i + 2]
-                el, _az, _dist = (satellite - topos).at(culminate_time).altaz()
-                return {
-                    "aos": rise_time.utc_iso(),
-                    "los": set_time.utc_iso(),
-                    "max_elevation": float(el.degrees),
-                }
-
-        current_el, _az, _dist = (satellite - topos).at(t0).altaz()
-        if current_el.degrees >= min_elevation:
-            set_time = None
-            max_elevation = current_el.degrees
-            for time, event in zip(times, events, strict=True):
-                if event == 1:
-                    el, _az, _dist = (satellite - topos).at(time).altaz()
-                    max_elevation = max(max_elevation, float(el.degrees))
-                elif event == 2:
-                    set_time = time
-                    break
-            return {
-                "aos": t0.utc_iso(),
-                "los": (set_time or t1).utc_iso(),
-                "max_elevation": max_elevation,
-                "synthesized": True,
-                "unbounded": set_time is None,
-            }
-        return None
+        steps = max(steps, 2)
+        duration_days = los_time.tt - aos_time.tt
+        sample_times = self._timescale.tt_jd(
+            [aos_time.tt + duration_days * i / (steps - 1) for i in range(steps)]
+        )
+        el, az, _dist = (satellite - topos).at(sample_times).altaz()
+        points = [{"az": float(a), "el": float(e)} for a, e in zip(az.degrees, el.degrees, strict=True)]
+        out = {
+            "aos": aos_time.utc_iso(),
+            "los": los_time.utc_iso(),
+            "max_elevation": max_elevation,
+            "points": points,
+        }
+        if synthesized:
+            out["synthesized"] = True
+            out["unbounded"] = unbounded
+        return out
 
     def passes_in_window(
         self, target_id: str, min_elevation: float = 0.0, search_hours: float = 48.0

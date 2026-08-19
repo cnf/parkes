@@ -80,6 +80,19 @@ def upcoming_passes(request: Request, min_elevation: float = 0.0):
     return _sky(request).upcoming_passes(min_elevation=min_elevation)
 
 
+@router.get("/passes/{target_id}/track")
+def pass_track(target_id: str, request: Request, min_elevation: float = 0.0, steps: int = 40):
+    try:
+        track = _sky(request).pass_track(target_id, min_elevation=min_elevation, steps=steps)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown target: {target_id}") from exc
+    if track is None:
+        raise HTTPException(404, f"no pass found for target: {target_id}")
+    return track
+
+
 @router.get("/status")
 def status(request: Request):
     scheduler = _scheduler(request)
