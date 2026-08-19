@@ -66,17 +66,31 @@ DEFAULTS: dict[str, Any] = {
     "gpsd_bind_host": settings.gpsd_bind_host,
     "gpsd_managed": settings.gpsd_managed,
     "gpsd_device": settings.gpsd_device,
+    # Which widgets share a card, and their stacking order within it --
+    # e.g. [["rotator", "orchestrator"], ["tracking"], ...] puts the
+    # rotator and orchestrator widgets on one shared card, rotator on top.
+    # Global rather than per-profile: whether two widgets belong on the
+    # same card is a structural choice, not something that should flip
+    # depending on viewport width. A group's first member is its "leader"
+    # -- the id dashboard_layout_wide/narrow entries below key on, and the
+    # id merge/split in dashboard-layout.js preserve (merging never changes
+    # the surviving leader; splitting only ever pulls out a non-leader
+    # member, so an entry's id is stable across regrouping).
+    "dashboard_groups": [
+        ["rotator"], ["orchestrator"], ["tracking"], ["pass-plot"], ["world-map"],
+    ],
     # Dashboard-page layout editor state (index.html only). "id" values are
-    # the data-widget-id attributes on each <section class="card">, so
-    # adding a new widget card later needs no migration here --
-    # dashboard-layout.js appends any card missing from either list at
-    # render time. Two separate layouts because phone/tablet-portrait
-    # (narrow, below the 60rem breakpoint dashboard-layout.js and style.css
-    # both key off) doesn't have room for side-by-side cards or a
-    # meaningful span choice -- it's always a single column, so narrow
-    # entries carry no "span". "wide"/"columns" only matter above that
-    # breakpoint. List order is display order in the grid; "span" is
-    # 1-dashboard_columns; "hidden" toggles visibility.
+    # group leader ids (see dashboard_groups) -- for an unmerged widget
+    # that's just its own data-widget-id, so adding a new widget card later
+    # needs no migration here -- dashboard-layout.js appends any card
+    # missing from either list at render time. Two separate layouts
+    # because phone/tablet-portrait (narrow, below the 60rem breakpoint
+    # dashboard-layout.js and style.css both key off) doesn't have room
+    # for side-by-side cards or a meaningful span choice -- it's always a
+    # single column, so narrow entries carry no "span". "wide"/"columns"
+    # only matter above that breakpoint. List order is display order in
+    # the grid; "span" is 1-dashboard_columns, clamped to the intersection
+    # of a merged card's members' individual span limits.
     "dashboard_layout_wide": [
         {"id": "rotator", "span": 2, "hidden": False},
         {"id": "orchestrator", "span": 1, "hidden": False},

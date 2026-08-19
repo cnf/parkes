@@ -1,4 +1,13 @@
 (() => {
+  // Inline rather than a Unicode glyph (e.g. U+2316) -- crosshair-style
+  // characters render thin/tiny and inconsistently across system fonts,
+  // easy to lose against the primary button's orange background.
+  const CROSSHAIR_ICON =
+    '<svg width="19" height="19" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">' +
+    '<circle cx="8" cy="8" r="5.5" />' +
+    '<circle cx="8" cy="8" r="1.6" fill="currentColor" stroke="none" />' +
+    "</svg>";
+
   const targetsBody = document.getElementById("targets-body");
   const trackingStatus = document.getElementById("tracking-status");
   const stopTrackingBtn = document.getElementById("stop-tracking-btn");
@@ -110,7 +119,7 @@
         <td>${target.el.toFixed(1)}&deg;</td>
         <td><span class="badge ${target.visible ? "up" : "down"}">${target.visible ? "up" : "down"}</span></td>
         <td>${formatPass(target)}</td>
-        <td><button class="btn-sm primary btn-icon" ${target.visible ? "" : "disabled"} data-target="${escapeHtml(target.id)}" title="Track" aria-label="Track">&#127919;</button></td>
+        <td><button class="btn-sm primary btn-icon" ${target.visible ? "" : "disabled"} data-target="${escapeHtml(target.id)}" title="Track" aria-label="Track">${CROSSHAIR_ICON}</button></td>
       `;
       targetsBody.appendChild(row);
     }

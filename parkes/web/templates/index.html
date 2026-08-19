@@ -68,7 +68,8 @@
     </div>
 
     <div class="page-grid" id="dashboard-grid">
-    <section class="card" data-widget-id="rotator">
+    <div class="card" data-group-id="rotator">
+    <section class="widget" data-widget-id="rotator">
       <div class="card-header">
         <h2>Rotator</h2>
         <span class="status-pill"><span class="status-dot" id="rotator-dot"></span><span id="rotator-status"></span></span>
@@ -118,8 +119,10 @@
         </div>
       </div>
     </section>
+    </div>
 
-    <section class="card" data-widget-id="orchestrator">
+    <div class="card" data-group-id="orchestrator">
+    <section class="widget" data-widget-id="orchestrator">
       <div class="card-header">
         <h2>Pass Orchestrator</h2>
         <span class="status-pill"><span class="status-dot" id="orchestrator-dot"></span><span id="orchestrator-status"></span></span>
@@ -132,8 +135,10 @@
         <a href="/orchestrator" class="back-link">Manage orchestrator &rarr;</a>
       </div>
     </section>
+    </div>
 
-    <section class="card" data-widget-id="tracking">
+    <div class="card" data-group-id="tracking">
+    <section class="widget" data-widget-id="tracking">
       <div class="card-header">
         <h2>Sky Tracking</h2>
         <span class="status-pill"><span class="status-dot" id="tracking-dot"></span><span id="tracking-status"></span></span>
@@ -149,8 +154,10 @@
         <tbody id="targets-body"></tbody>
       </table>
     </section>
+    </div>
 
-    <section class="card" id="pass-plot-card" data-widget-id="pass-plot">
+    <div class="card" data-group-id="pass-plot">
+    <section class="widget" id="pass-plot-card" data-widget-id="pass-plot">
       <div class="card-header">
         <h2>Pass Plot</h2>
         <span class="status-pill"><span id="pass-plot-target">--</span></span>
@@ -196,8 +203,10 @@
       </div>
       <p class="hint" id="pass-plot-empty" style="display: none;">No upcoming passes.</p>
     </section>
+    </div>
 
-    <section class="card" id="world-map-card" data-widget-id="world-map" data-widget-label="World Map">
+    <div class="card" data-group-id="world-map">
+    <section class="widget" id="world-map-card" data-widget-id="world-map" data-widget-label="World Map">
       <div class="world-map-wrap">
         <svg viewBox="-180 -90 360 180" id="world-map-svg">
           <rect class="wm-ocean" x="-180" y="-90" width="360" height="180" />
@@ -213,6 +222,7 @@
         </svg>
       </div>
     </section>
+    </div>
     </div>
 {% endblock %}
 

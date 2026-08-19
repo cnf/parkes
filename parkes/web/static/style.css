@@ -87,15 +87,26 @@ body.dashboard-page.full-width { max-width: none; }
 .width-toggle { display: flex; flex-direction: row; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-muted); }
 .width-toggle input { width: auto; }
 
+.card-edit { margin-bottom: 0.9rem; }
 .card-edit-bar {
   display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
   background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-  padding: 0.35rem 0.5rem; margin-bottom: 0.9rem; font-size: 0.8rem;
+  padding: 0.35rem 0.5rem; font-size: 0.8rem;
 }
 .card-edit-name { flex: 1; font-weight: 600; color: var(--text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-edit-bar select { width: auto; font-size: 0.8rem; padding: 0.2rem 0.4rem; }
 .card-edit-hidden { flex-direction: row; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--text-muted); }
 .card-edit-hidden input { width: auto; }
+
+/* Per-member "split out" rows shown under a merged card's edit bar --
+   indented to read as belonging to the bar above, not a new section. */
+.card-edit-members { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.4rem 0 0 0.75rem; }
+.card-edit-member { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; font-size: 0.78rem; color: var(--text-muted); }
+
+/* Divider between widgets stacked on a merged card -- same visual weight
+   as .divider elsewhere, but scoped to consecutive .widget siblings so an
+   unmerged (single-widget) card gets no extra rule at all. */
+.widget + .widget { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
 
 header { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 1.75rem; }
 header .dots { display: inline-flex; gap: 0.3rem; }
@@ -169,7 +180,8 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
 button.primary:disabled { opacity: 0.35; }
 button.btn-sm { padding: 0.25rem 0.65rem; font-size: 0.8rem; }
-button.btn-icon { padding: 0.2rem 0.5rem; font-size: 0.95rem; line-height: 1; }
+button.btn-icon { padding: 0.25rem; font-size: 0.95rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+button.btn-icon svg { display: block; }
 button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 button.danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 button.danger:disabled { opacity: 0.35; }

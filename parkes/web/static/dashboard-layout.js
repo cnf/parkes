@@ -13,7 +13,8 @@
   // Widgets that don't make sense at every span: the rotator/pass-plot
   // instruments are compact and look odd stretched full-width, the world
   // map needs room to be legible. Anything not listed has no constraint
-  // beyond [1, current column count].
+  // beyond [1, current column count]. A merged card's limits are the
+  // intersection of its members' -- see groupMinSpan/groupMaxSpan.
   const SPAN_LIMITS = {
     rotator: { max: 2 },
     "pass-plot": { max: 2 },
@@ -21,15 +22,28 @@
   };
   const minSpanFor = (id) => SPAN_LIMITS[id]?.min || 1;
   const maxSpanFor = (id, columns) => Math.min(SPAN_LIMITS[id]?.max || columns, columns);
+  const groupMinSpan = (members) => Math.max(...members.map(minSpanFor));
+  const groupMaxSpan = (members, columns) => Math.min(...members.map((id) => maxSpanFor(id, columns)));
 
-  const cards = new Map();
-  for (const el of grid.querySelectorAll(":scope > .card[data-widget-id]")) {
-    cards.set(el.dataset.widgetId, el);
+  // widgetEls never changes after load -- a widget's own <section> is a
+  // fixed piece of markup that only ever moves between group wrapper
+  // divs, never gets recreated. groupWrapperEls does change: a wrapper is
+  // created the first time its leader appears, and removed once nothing
+  // groups under that leader any more (see applyGroupsToDOM).
+  const widgetEls = new Map();
+  for (const el of grid.querySelectorAll("[data-widget-id]")) {
+    widgetEls.set(el.dataset.widgetId, el);
+  }
+  const groupWrapperEls = new Map();
+  for (const el of grid.querySelectorAll(":scope > [data-group-id]")) {
+    groupWrapperEls.set(el.dataset.groupId, el);
   }
 
   // Below this, cards stack in a single column -- no row to share, so no
   // span choice and no per-widget layout worth saving separately from
   // "narrow". Matches style.css's own breakpoint for the same grid.
+  // Grouping itself (dashboard_groups) is NOT profile-specific -- which
+  // widgets share a card is a structural choice, not a viewport one.
   const mql = window.matchMedia("(min-width: 60rem)");
   const currentProfile = () => (mql.matches ? "wide" : "narrow");
 
@@ -42,60 +56,111 @@
   }
 
   function labelFor(id) {
-    const el = cards.get(id);
+    const el = widgetEls.get(id);
     return el.dataset.widgetLabel || el.querySelector(".card-header h2")?.textContent || id;
   }
 
-  function normalizeWide(raw, columns) {
-    const known = new Set(cards.keys());
+  function normalizeGroups(raw) {
+    const known = new Set(widgetEls.keys());
+    const seen = new Set();
+    const groups = [];
+    for (const members of raw || []) {
+      const filtered = (members || []).filter((id) => known.has(id) && !seen.has(id));
+      for (const id of filtered) seen.add(id);
+      if (filtered.length) groups.push(filtered);
+    }
+    for (const id of known) {
+      if (!seen.has(id)) groups.push([id]);
+    }
+    return groups;
+  }
+
+  function normalizeWide(raw, groups, columns) {
+    const groupByLeader = new Map(groups.map((g) => [g[0], g]));
+    const known = new Set(groupByLeader.keys());
     const seen = new Set();
     const layout = [];
     for (const entry of raw || []) {
       if (!known.has(entry.id) || seen.has(entry.id)) continue;
       seen.add(entry.id);
-      const min = minSpanFor(entry.id);
-      const max = maxSpanFor(entry.id, columns);
+      const members = groupByLeader.get(entry.id);
+      const min = groupMinSpan(members);
+      const max = groupMaxSpan(members, columns);
       const span = Math.min(Math.max(Number(entry.span) || min, min), max);
       layout.push({ id: entry.id, span, hidden: !!entry.hidden });
     }
-    for (const id of known) {
-      if (!seen.has(id)) layout.push({ id, span: Math.min(minSpanFor(id), columns), hidden: false });
+    for (const leader of known) {
+      if (!seen.has(leader)) {
+        const members = groupByLeader.get(leader);
+        layout.push({ id: leader, span: Math.min(groupMinSpan(members), columns), hidden: false });
+      }
     }
     return layout;
   }
 
-  function normalizeNarrow(raw) {
-    const known = new Set(cards.keys());
+  function normalizeNarrow(raw, groups) {
+    const leaders = new Set(groups.map((g) => g[0]));
     const seen = new Set();
     const layout = [];
     for (const entry of raw || []) {
-      if (!known.has(entry.id) || seen.has(entry.id)) continue;
+      if (!leaders.has(entry.id) || seen.has(entry.id)) continue;
       seen.add(entry.id);
       layout.push({ id: entry.id, hidden: !!entry.hidden });
     }
-    for (const id of known) {
-      if (!seen.has(id)) layout.push({ id, hidden: false });
+    for (const leader of leaders) {
+      if (!seen.has(leader)) layout.push({ id: leader, hidden: false });
     }
     return layout;
   }
 
-  function applyWide(layout, columns) {
+  // Creates/reuses a wrapper div per group leader and moves each member's
+  // <section> into it in the group's own order, then drops any wrapper
+  // whose leader no longer groups anything (its sole member moved
+  // elsewhere on a merge). Wrapper divs are the grid's direct children --
+  // applyWide/applyNarrow position *them*, never raw widget sections.
+  function applyGroupsToDOM(groups) {
+    const usedLeaders = new Set();
+    for (const members of groups) {
+      const leader = members[0];
+      let wrapper = groupWrapperEls.get(leader);
+      if (!wrapper) {
+        wrapper = document.createElement("div");
+        wrapper.className = "card";
+        wrapper.dataset.groupId = leader;
+        groupWrapperEls.set(leader, wrapper);
+      }
+      for (const id of members) {
+        wrapper.appendChild(widgetEls.get(id));
+      }
+      usedLeaders.add(leader);
+    }
+    for (const [leader, wrapper] of [...groupWrapperEls.entries()]) {
+      if (!usedLeaders.has(leader)) {
+        wrapper.remove();
+        groupWrapperEls.delete(leader);
+      }
+    }
+  }
+
+  function applyWide(layout, groups, columns) {
+    applyGroupsToDOM(groups);
     grid.classList.remove("cols-2", "cols-3", "cols-4");
     grid.classList.add(`cols-${columns}`);
     for (const entry of layout) {
-      const el = cards.get(entry.id);
-      el.classList.remove("span-1", "span-2", "span-3");
+      const el = groupWrapperEls.get(entry.id);
+      el.classList.remove("span-1", "span-2", "span-3", "span-4");
       el.classList.add(`span-${entry.span}`);
       el.classList.toggle("widget-hidden", entry.hidden);
       grid.appendChild(el);
     }
   }
 
-  function applyNarrow(layout) {
+  function applyNarrow(layout, groups) {
+    applyGroupsToDOM(groups);
     grid.classList.remove("cols-2", "cols-3", "cols-4");
     for (const entry of layout) {
-      const el = cards.get(entry.id);
-      el.classList.remove("span-1", "span-2", "span-3");
+      const el = groupWrapperEls.get(entry.id);
+      el.classList.remove("span-1", "span-2", "span-3", "span-4");
       el.classList.toggle("widget-hidden", entry.hidden);
       grid.appendChild(el);
     }
@@ -105,12 +170,14 @@
     document.body.classList.toggle("full-width", mode === "full");
   }
 
+  let savedGroups = [];
   let savedWide = [];
   let savedNarrow = [];
   let savedColumns = 3;
   let savedWidth = "controlled";
 
   let editing = false;
+  let workingGroups = [];
   let workingWide = [];
   let workingNarrow = [];
   let workingColumns = 3;
@@ -118,25 +185,62 @@
 
   function applyForProfile(profile) {
     if (profile === "wide") {
-      applyWide(editing ? workingWide : savedWide, editing ? workingColumns : savedColumns);
+      applyWide(
+        editing ? workingWide : savedWide,
+        editing ? workingGroups : savedGroups,
+        editing ? workingColumns : savedColumns
+      );
     } else {
-      applyNarrow(editing ? workingNarrow : savedNarrow);
+      applyNarrow(editing ? workingNarrow : savedNarrow, editing ? workingGroups : savedGroups);
     }
   }
 
   function clearEditBars() {
-    for (const el of cards.values()) {
-      el.querySelector(":scope > .card-edit-bar")?.remove();
+    for (const el of groupWrapperEls.values()) {
+      el.querySelector(":scope > .card-edit")?.remove();
     }
   }
 
-  function buildEditBar(entry, index, layout, profile) {
+  function groupOf(leaderId) {
+    return workingGroups.find((g) => g[0] === leaderId);
+  }
+
+  function reconcileWorkingLayouts() {
+    workingWide = normalizeWide(workingWide, workingGroups, workingColumns);
+    workingNarrow = normalizeNarrow(workingNarrow, workingGroups);
+  }
+
+  function mergeWithNext(layout, index) {
+    const g1 = groupOf(layout[index].id);
+    const g2 = groupOf(layout[index + 1].id);
+    if (!g1 || !g2) return;
+    workingGroups = workingGroups.filter((g) => g !== g1 && g !== g2);
+    workingGroups.push(g1.concat(g2));
+    reconcileWorkingLayouts();
+    renderEditUI();
+  }
+
+  function splitOut(leaderId, widgetId) {
+    const g = groupOf(leaderId);
+    const idx = g.indexOf(widgetId);
+    if (idx <= 0) return; // leader (index 0) can't be split off itself
+    g.splice(idx, 1);
+    workingGroups.push([widgetId]);
+    reconcileWorkingLayouts();
+    renderEditUI();
+  }
+
+  function buildEditPanel(entry, index, layout, profile) {
+    const members = groupOf(entry.id);
+    const container = document.createElement("div");
+    container.className = "card-edit";
+
     const bar = document.createElement("div");
     bar.className = "card-edit-bar";
 
     const nameEl = document.createElement("span");
     nameEl.className = "card-edit-name";
-    nameEl.textContent = labelFor(entry.id);
+    nameEl.textContent = members.map(labelFor).join(" + ");
     bar.appendChild(nameEl);
 
     const upBtn = document.createElement("button");
@@ -162,8 +266,8 @@
     bar.appendChild(downBtn);
 
     if (profile === "wide") {
-      const min = minSpanFor(entry.id);
-      const max = maxSpanFor(entry.id, workingColumns);
+      const min = groupMinSpan(members);
+      const max = groupMaxSpan(members, workingColumns);
       if (min < max) {
         const select = document.createElement("select");
         for (let n = min; n <= max; n++) {
@@ -194,7 +298,48 @@
     hiddenLabel.append("Hidden");
     bar.appendChild(hiddenLabel);
 
-    return bar;
+    const nextEntry = layout[index + 1];
+    const mergeBtn = document.createElement("button");
+    mergeBtn.type = "button";
+    mergeBtn.className = "btn-sm";
+    mergeBtn.textContent = "⤵ Merge";
+    if (nextEntry) {
+      const nextMembers = groupOf(nextEntry.id);
+      const combined = members.concat(nextMembers);
+      const feasible = groupMinSpan(combined) <= groupMaxSpan(combined, workingColumns);
+      mergeBtn.disabled = !feasible;
+      mergeBtn.title = feasible
+        ? `Merge with ${nextMembers.map(labelFor).join(" + ")}`
+        : "Span limits don't overlap";
+      mergeBtn.addEventListener("click", () => mergeWithNext(layout, index));
+    } else {
+      mergeBtn.disabled = true;
+    }
+    bar.appendChild(mergeBtn);
+
+    container.appendChild(bar);
+
+    if (members.length > 1) {
+      const list = document.createElement("div");
+      list.className = "card-edit-members";
+      for (const widgetId of members.slice(1)) {
+        const row = document.createElement("div");
+        row.className = "card-edit-member";
+        const label = document.createElement("span");
+        label.textContent = labelFor(widgetId);
+        row.appendChild(label);
+        const splitBtn = document.createElement("button");
+        splitBtn.type = "button";
+        splitBtn.className = "btn-sm";
+        splitBtn.textContent = "Split out";
+        splitBtn.addEventListener("click", () => splitOut(entry.id, widgetId));
+        row.appendChild(splitBtn);
+        list.appendChild(row);
+      }
+      container.appendChild(list);
+    }
+
+    return container;
   }
 
   function renderEditUI() {
@@ -203,7 +348,7 @@
     clearEditBars();
     const layout = profile === "wide" ? workingWide : workingNarrow;
     layout.forEach((entry, index) => {
-      cards.get(entry.id).prepend(buildEditBar(entry, index, layout, profile));
+      groupWrapperEls.get(entry.id).prepend(buildEditPanel(entry, index, layout, profile));
     });
     columnsField.style.display = profile === "wide" ? "" : "none";
     columnsSelect.value = String(workingColumns);
@@ -211,6 +356,7 @@
 
   function openEditor() {
     editing = true;
+    workingGroups = savedGroups.map((g) => [...g]);
     workingWide = savedWide.map((e) => ({ ...e }));
     workingNarrow = savedNarrow.map((e) => ({ ...e }));
     workingColumns = savedColumns;
@@ -237,11 +383,7 @@
 
   columnsSelect.addEventListener("change", () => {
     workingColumns = Number(columnsSelect.value);
-    for (const entry of workingWide) {
-      const min = minSpanFor(entry.id);
-      const max = maxSpanFor(entry.id, workingColumns);
-      entry.span = Math.min(Math.max(entry.span, min), max);
-    }
+    workingWide = normalizeWide(workingWide, workingGroups, workingColumns);
     renderEditUI();
   });
 
@@ -255,12 +397,14 @@
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        dashboard_groups: workingGroups,
         dashboard_layout_wide: workingWide,
         dashboard_layout_narrow: workingNarrow,
         dashboard_columns: workingColumns,
         dashboard_width: workingWidth,
       }),
     });
+    savedGroups = workingGroups;
     savedWide = workingWide;
     savedNarrow = workingNarrow;
     savedColumns = workingColumns;
@@ -283,9 +427,10 @@
   (async () => {
     const data = await apiFetch("/api/settings");
     const p = data.preferences;
+    savedGroups = normalizeGroups(p.dashboard_groups);
     savedColumns = [2, 3, 4].includes(p.dashboard_columns) ? p.dashboard_columns : 3;
-    savedWide = normalizeWide(p.dashboard_layout_wide, savedColumns);
-    savedNarrow = normalizeNarrow(p.dashboard_layout_narrow);
+    savedWide = normalizeWide(p.dashboard_layout_wide, savedGroups, savedColumns);
+    savedNarrow = normalizeNarrow(p.dashboard_layout_narrow, savedGroups);
     savedWidth = p.dashboard_width === "full" ? "full" : "controlled";
     applyWidthClass(savedWidth);
     applyForProfile(currentProfile());

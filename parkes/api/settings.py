@@ -49,6 +49,7 @@ class UpdateSettingsRequest(BaseModel):
     gpsd_bind_host: str | None = None
     gpsd_managed: bool | None = None
     gpsd_device: str | None = None
+    dashboard_groups: list[list[str]] | None = None
     dashboard_layout_wide: list[DashboardWideWidgetLayout] | None = None
     dashboard_layout_narrow: list[DashboardNarrowWidgetLayout] | None = None
     dashboard_columns: Literal[2, 3, 4] | None = None
