@@ -60,18 +60,21 @@
 
     <section class="card">
       <div class="card-header">
-        <h2>SDR Network Sharing</h2>
+        <div class="card-header-title">
+          <h2>SDR Network Sharing</h2>
+          <label class="managed-toggle">
+            <input id="sdr-auto-toggle" type="checkbox" style="width: auto; accent-color: var(--accent);" />
+            Auto-manage
+          </label>
+        </div>
         <span class="status-pill"><span class="status-dot" id="sdr-dot"></span><span id="sdr-status"></span></span>
       </div>
       <p class="hint">
         Exposes the local SDR over the network via SoapyRemote, so gpredict/gqrx/a laptop-side
         satdump can use it directly. Mutually exclusive with local app profiles that need the SDR
-        -- only one can hold the physical device at a time.
+        -- only one can hold the physical device at a time. With Auto-manage on, sharing releases
+        automatically for a local app profile that needs the SDR, and resumes once it's free.
       </p>
-      <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; margin-bottom: 0.8rem;">
-        <input id="sdr-auto-toggle" type="checkbox" style="width: auto; accent-color: var(--accent);" />
-        Auto-manage -- release for a local app profile that needs the SDR, resume once it's free
-      </label>
       <div class="settings-grid" style="margin-bottom: 0.8rem;">
         <label>Bind host <input id="sdr-bind-host" type="text" placeholder="0.0.0.0" /></label>
         <label>Bind port <input id="sdr-bind-port" type="number" step="1" placeholder="55132" /></label>

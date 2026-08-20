@@ -152,6 +152,9 @@ button.back-link { background: none; border: none; padding: 0; cursor: pointer; 
   color: var(--text-muted);
 }
 .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.1rem; }
+.card-header-title { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.managed-toggle { display: flex; flex-direction: row; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: normal; color: var(--text-muted); }
+.managed-toggle input { width: auto; accent-color: var(--accent); }
 
 .command-line {
   font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8rem;
@@ -299,8 +302,25 @@ tr:last-child td { border-bottom: none; }
 }
 .freq-tooltip-hint { color: var(--text-muted); }
 
-.plot-layout { display: flex; gap: 2.5rem; align-items: center; flex-wrap: wrap; }
-.plot-wrap { position: relative; width: 17rem; height: 17rem; flex-shrink: 0; }
+/* Lets .plot-layout's @container rule below key off the *card's* own
+   rendered width -- not the viewport's, which has no fixed relationship
+   to it once cards can span 1-4 columns, get merged with another widget,
+   or the dashboard switches between controlled/full width. That mismatch
+   was the actual cause of the plot "jumbling": a plain flex-wrap was
+   folding to a stacked layout at whatever width the fixed 17rem circle +
+   10rem readout + gap happened to stop fitting, which shifts around
+   under the card's own control, not the browser window's -- so the same
+   card could wrap or not on an unchanged screen, just from picking a
+   different column count. One deliberate breakpoint on the card's own
+   width replaces that. */
+.card { container-type: inline-size; }
+
+.plot-layout { display: flex; gap: 2.5rem; align-items: center; justify-content: center; }
+/* Grows with the card instead of staying a fixed 17rem -- on a wide card
+   (a full-width single-column dashboard, say) the circle claiming more of
+   the space reads far better than a small fixed plot with a wide empty
+   margin next to it. cqi = 1% of the container's inline size. */
+.plot-wrap { position: relative; width: clamp(14rem, 32cqi, 22rem); aspect-ratio: 1; flex-shrink: 0; }
 .plot-wrap svg { width: 100%; height: 100%; display: block; }
 
 .plot-wrap .ring { fill: none; stroke: var(--border); stroke-width: 1; }
@@ -315,37 +335,70 @@ tr:last-child td { border-bottom: none; }
 .plot-wrap .aos-marker { fill: var(--surface); stroke: var(--accent2); stroke-width: 1.5; }
 .plot-wrap .los-marker { fill: var(--text-muted); }
 
-.readout-stack { display: flex; flex-direction: column; gap: 0.55rem; min-width: 10rem; }
-.readout-stack .sat-name { font-size: 1.05rem; font-weight: 700; }
+/* Tighter within a logical group (label hugging its value), a bit more
+   air between groups (name / az-el / countdown / note) so the stack
+   reads as sections instead of one flat evenly-spaced list. */
+.readout-stack { display: flex; flex-direction: column; gap: 0.85rem; min-width: 10rem; }
+.readout-stack .sat-name { font-size: 1.05rem; font-weight: 700; margin-bottom: -0.2rem; }
 .readout-row { display: flex; gap: 1.1rem; font-variant-numeric: tabular-nums; }
 .readout-row .val { font-size: 1.05rem; font-weight: 600; }
 .readout-row .unit { font-size: 0.78rem; color: var(--text-muted); font-weight: 400; }
-.readout-row .lab { display: block; font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.1rem; }
+.readout-row .lab { display: block; font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.15rem; }
 
+.countdown-block { margin-top: -0.15rem; }
 .countdown { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent2); }
-.countdown-lab { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.countdown-lab { display: block; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.15rem; }
 .max-el-note { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
 
+@container (max-width: 26rem) {
+  .plot-layout { flex-direction: column; }
+  .plot-wrap { width: clamp(12rem, 60cqi, 17rem); }
+  .readout-stack { align-items: center; text-align: center; }
+  .readout-row { justify-content: center; }
+}
+
 .world-map-wrap { width: 100%; }
-.world-map-wrap svg { width: 100%; height: auto; display: block; }
+/* --wm-px (set by world-map.js from the SVG's actual rendered width) is
+   "how many viewBox user-units make up one real screen pixel" right now --
+   every label's font-size is that times its target pixel size below, so
+   the *rendered* size stays constant as the card is resized instead of
+   the user-unit size staying constant and the glyphs scaling with it. */
+.world-map-wrap svg { width: 100%; height: auto; display: block; --wm-px: 0.5625; }
 .world-map-wrap .wm-ocean { fill: var(--bg); }
 .world-map-wrap .wm-border { fill: none; stroke: var(--border); stroke-width: 0.6; }
 .world-map-wrap .wm-land { fill: var(--border); stroke: var(--text-muted); stroke-width: 0.25; }
 .world-map-wrap .wm-graticule { stroke: var(--border); stroke-width: 0.25; }
 .world-map-wrap .wm-graticule-label {
-  fill: var(--text-muted); font-size: 4.5px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  fill: var(--text-muted); font-size: calc(var(--wm-px) * 12px); font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
-.world-map-wrap .wm-track { fill: none; stroke: var(--accent2); stroke-width: 0.6; opacity: 0.85; }
-.world-map-wrap .wm-footprint { fill: var(--accent); fill-opacity: 0.07; stroke: var(--accent); stroke-width: 0.35; stroke-dasharray: 1.4 1; opacity: 0.75; }
-.world-map-wrap .wm-subpoint { fill: var(--accent); stroke: var(--surface); stroke-width: 0.4; }
+/* Every enabled satellite's ground track and footprint would otherwise
+   overlap at full opacity, which stops being readable past two or three
+   satellites -- so only the actively-tracked one and whichever is next up
+   (see world-map.js's resolveFocusIds) default to fully visible; dim
+   opacity alone marks the rest as background. Dashed marks the hovered
+   one specifically -- a distinct look from the focused/solid state, since
+   hover can land on an already-focused satellite too. A satellite's
+   track/footprint/subpoint share a data-sat-id world-map.js uses to add
+   .wm-hover to all of them together on pointer-over, so pointing at any
+   one part of a dimmed satellite reveals the rest of it. */
+.world-map-wrap .wm-track { fill: none; stroke: var(--accent2); stroke-width: 0.6; opacity: 0.12; transition: opacity 0.15s; }
+.world-map-wrap .wm-track.wm-focused { opacity: 0.85; }
+.world-map-wrap .wm-track.wm-hover { opacity: 1; stroke-dasharray: 1.5 1.5; }
+.world-map-wrap .wm-footprint {
+  fill: var(--accent); fill-opacity: 0.07; stroke: var(--accent); stroke-width: 0.35; stroke-dasharray: 1.4 1;
+  opacity: 0.5; transition: opacity 0.15s;
+}
+.world-map-wrap .wm-footprint.wm-hover { opacity: 1; }
+.world-map-wrap .wm-subpoint { fill: var(--accent); stroke: var(--surface); stroke-width: 0.4; cursor: default; }
 .world-map-wrap .wm-subpoint-label {
-  fill: var(--text); font-size: 5px; font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  fill: var(--text); font-size: calc(var(--wm-px) * 12.5px); font-weight: 600;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; cursor: default;
 }
 .world-map-wrap .wm-observer { fill: var(--accent2); stroke: var(--surface); stroke-width: 0.4; }
 .world-map-wrap .wm-observer-label {
-  fill: var(--accent2); font-size: 5px; font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  fill: var(--accent2); font-size: calc(var(--wm-px) * 12.5px); font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
 .world-map-wrap .wm-next-label {
-  fill: var(--success); font-size: 6px; font-weight: 600; font-variant-numeric: tabular-nums;
+  fill: var(--success); font-size: calc(var(--wm-px) * 14px); font-weight: 600; font-variant-numeric: tabular-nums;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }

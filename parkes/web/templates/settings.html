@@ -61,7 +61,13 @@
 
     <section class="card">
       <div class="card-header">
-        <h2>Rotator (rotctld)</h2>
+        <div class="card-header-title">
+          <h2>Rotator (rotctld)</h2>
+          <label class="managed-toggle">
+            <input name="rotctld_managed" type="checkbox" form="rotator-form" style="width: auto; accent-color: var(--accent);" />
+            Managed by Parkes
+          </label>
+        </div>
         <span class="status-pill"><span class="status-dot" id="rotator-mgmt-dot"></span><span id="rotator-mgmt-status"></span></span>
       </div>
       <p class="hint">
@@ -73,10 +79,6 @@
         <code>localhost</code> for Parkes's own connection.
       </p>
       <form id="rotator-form">
-        <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; margin-bottom: 0.6rem;">
-          <input name="rotctld_managed" type="checkbox" style="width: auto; accent-color: var(--accent);" />
-          Managed by Parkes
-        </label>
         <div class="settings-grid">
           <label>Host (connect) <input name="rotctld_host" type="text" /></label>
           <label>Port <input name="rotctld_port" type="number" step="1" min="1" /></label>
@@ -93,7 +95,13 @@
 
     <section class="card">
       <div class="card-header">
-        <h2>GPS (gpsd)</h2>
+        <div class="card-header-title">
+          <h2>GPS (gpsd)</h2>
+          <label class="managed-toggle">
+            <input name="gpsd_managed" type="checkbox" form="gpsd-form" style="width: auto; accent-color: var(--accent);" />
+            Managed by Parkes
+          </label>
+        </div>
         <span class="status-pill"><span class="status-dot" id="gpsd-mgmt-dot"></span><span id="gpsd-mgmt-status"></span></span>
       </div>
       <p class="hint">
@@ -104,10 +112,6 @@
         all interfaces, not just loopback).
       </p>
       <form id="gpsd-form">
-        <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; margin-bottom: 0.6rem;">
-          <input name="gpsd_managed" type="checkbox" style="width: auto; accent-color: var(--accent);" />
-          Managed by Parkes
-        </label>
         <div class="settings-grid">
           <label>Host (connect) <input name="gpsd_host" type="text" /></label>
           <label>Port <input name="gpsd_port" type="number" step="1" min="1" /></label>

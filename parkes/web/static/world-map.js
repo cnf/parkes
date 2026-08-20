@@ -73,6 +73,27 @@
     }
   }
 
+  // Label font-size scales with the SVG's own coordinate system (the
+  // viewBox), so a fixed "5px" reads fine at one card width and is either
+  // a speck or oversized at another -- the map gets resized a lot, being
+  // one of the widgets the dashboard layout editor can span/merge freely.
+  // --wm-px is "how many user-units equal one real screen pixel" right
+  // now; every label's font-size is that times its target pixel size (see
+  // style.css), so the *rendered* size stays constant across widths
+  // instead of the user-unit size staying constant.
+  function updateTextScale() {
+    const width = svg.getBoundingClientRect().width;
+    if (width > 0) svg.style.setProperty("--wm-px", (360 / width).toFixed(4));
+  }
+  // Belt and suspenders: ResizeObserver is the immediate/precise path, a
+  // plain window resize listener is a second one, and refreshGroundTracks'
+  // 20s interval below also calls this as a floor -- so the dashboard
+  // layout editor resizing/merging/spanning this card (which isn't a
+  // window resize at all) still self-corrects shortly either way, even in
+  // a browser/embedding where ResizeObserver on this element doesn't fire.
+  new ResizeObserver(updateTextScale).observe(svg.parentElement);
+  window.addEventListener("resize", updateTextScale);
+
   async function loadLand() {
     const res = await fetch("/static/world-land.svgpath");
     landPath.setAttribute("d", await res.text());
@@ -93,8 +114,34 @@
     observerLabel.style.display = "";
   }
 
+  // Same target the "Track" table highlights as current, plus whichever
+  // satellite is next up -- mirrors pass-plot.js's pickTarget() for the
+  // "current" half (see its comment on why active_target needs matching
+  // by name, not id). Everything else's track/footprint stays dim by
+  // default (see refreshGroundTracks) rather than every enabled
+  // satellite's ground track and footprint overlapping at full opacity,
+  // which is unreadable once more than two or three are enabled.
+  async function resolveFocusIds() {
+    const [statusRes, targetsRes, passesRes] = await Promise.all([
+      fetch("/api/tracking/status"),
+      fetch("/api/tracking/targets"),
+      fetch("/api/tracking/passes"),
+    ]);
+    const status = await statusRes.json();
+    const targets = await targetsRes.json();
+    const passes = await passesRes.json();
+
+    let currentId = null;
+    if (status.active_target) {
+      const match = targets.find((t) => t.kind === "satellite" && t.name === status.active_target);
+      if (match) currentId = match.id;
+    }
+    const next = passes.find((p) => !p.synthesized && p.id !== currentId);
+    return { currentId, nextId: next ? next.id : null };
+  }
+
   async function refreshGroundTracks() {
-    const res = await fetch("/api/tracking/groundtracks");
+    const [res, focus] = await Promise.all([fetch("/api/tracking/groundtracks"), resolveFocusIds()]);
     const sats = await res.json();
 
     tracksGroup.innerHTML = "";
@@ -102,14 +149,18 @@
     subpointsGroup.innerHTML = "";
 
     for (const sat of sats) {
+      const focused = sat.id === focus.currentId || sat.id === focus.nextId;
+
       const track = document.createElementNS(svgNS, "path");
-      track.setAttribute("class", "wm-track");
+      track.setAttribute("class", "wm-track" + (focused ? " wm-focused" : ""));
+      track.setAttribute("data-sat-id", sat.id);
       track.setAttribute("d", pathFromLatLon(sat.track, false));
       tracksGroup.appendChild(track);
 
       if (sat.footprint.length > 0) {
         const footprint = document.createElementNS(svgNS, "path");
         footprint.setAttribute("class", "wm-footprint");
+        footprint.setAttribute("data-sat-id", sat.id);
         footprint.setAttribute("d", pathFromLatLon(sat.footprint, true));
         footprintsGroup.appendChild(footprint);
       }
@@ -117,6 +168,7 @@
       const p = project(sat.subpoint.lat, sat.subpoint.lon);
       const dot = document.createElementNS(svgNS, "circle");
       dot.setAttribute("class", "wm-subpoint");
+      dot.setAttribute("data-sat-id", sat.id);
       dot.setAttribute("r", 1.4);
       dot.setAttribute("cx", p.x);
       dot.setAttribute("cy", p.y);
@@ -124,12 +176,37 @@
 
       const label = document.createElementNS(svgNS, "text");
       label.setAttribute("class", "wm-subpoint-label");
+      label.setAttribute("data-sat-id", sat.id);
       label.setAttribute("x", p.x + 2.2);
       label.setAttribute("y", p.y - 1.5);
       label.textContent = sat.name;
       subpointsGroup.appendChild(label);
     }
   }
+
+  // A satellite's track/footprint/subpoint/label are siblings across three
+  // separate <g> groups (drawn in that stacking order so tracks sit under
+  // footprints sit under subpoints), not nested under one shared parent --
+  // so CSS :hover + sibling selectors can't reach across them. Delegating
+  // one pair of listeners on the whole SVG and matching by data-sat-id
+  // covers all four regardless of which one the pointer is actually over.
+  svg.addEventListener("mouseover", (event) => {
+    const target = event.target.closest("[data-sat-id]");
+    if (!target) return;
+    const id = target.dataset.satId;
+    for (const el of svg.querySelectorAll(`[data-sat-id="${CSS.escape(id)}"]`)) {
+      el.classList.add("wm-hover");
+    }
+  });
+  svg.addEventListener("mouseout", (event) => {
+    const target = event.target.closest("[data-sat-id]");
+    if (!target) return;
+    if (target.contains(event.relatedTarget)) return;
+    const id = target.dataset.satId;
+    for (const el of svg.querySelectorAll(`[data-sat-id="${CSS.escape(id)}"]`)) {
+      el.classList.remove("wm-hover");
+    }
+  });
 
   // Fetched occasionally (see setInterval below); tickNext() re-renders
   // the countdown from this cache every second without hammering the
@@ -157,11 +234,13 @@
   }
 
   buildGraticule();
+  updateTextScale();
   loadLand();
   refreshObserver();
   refreshGroundTracks();
   refreshNextPass();
   setInterval(refreshGroundTracks, 20000);
+  setInterval(updateTextScale, 20000);
   setInterval(refreshNextPass, 20000);
   setInterval(tickNext, 1000);
 
