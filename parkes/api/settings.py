@@ -33,6 +33,7 @@ class UpdateSettingsRequest(BaseModel):
     satdump_sdr_source_id: str | None = None
     satdump_samplerate: int | None = None
     orchestrator_min_elevation: float | None = None
+    active_antenna_id: str | None = None
     soapy_remote_bind_host: str | None = None
     soapy_remote_bind_port: int | None = None
     soapy_remote_auto: bool | None = None

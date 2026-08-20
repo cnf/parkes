@@ -30,6 +30,9 @@ DEFAULTS: dict[str, Any] = {
     "satdump_sdr_source_id": settings.satdump_sdr_source_id,
     "satdump_samplerate": settings.satdump_samplerate,
     "orchestrator_min_elevation": settings.orchestrator_min_elevation,
+    # Which tracking/antennas.py entry is physically connected right now --
+    # None means no antenna is selected, so nothing is band-filtered.
+    "active_antenna_id": None,
     "soapy_remote_bind_host": settings.soapy_remote_bind_host,
     "soapy_remote_bind_port": settings.soapy_remote_bind_port,
     # When on, SdrArbiter (see sdr/arbiter.py) runs SoapyRemote whenever no
@@ -77,7 +80,7 @@ DEFAULTS: dict[str, Any] = {
     # the surviving leader; splitting only ever pulls out a non-leader
     # member, so an entry's id is stable across regrouping).
     "dashboard_groups": [
-        ["rotator"], ["orchestrator"], ["tracking"], ["pass-plot"], ["world-map"],
+        ["world-map"], ["pass-plot", "tracking"], ["rotator", "orchestrator"],
     ],
     # Dashboard-page layout editor state (index.html only). "id" values are
     # group leader ids (see dashboard_groups) -- for an unmerged widget
@@ -92,21 +95,17 @@ DEFAULTS: dict[str, Any] = {
     # the grid; "span" is 1-dashboard_columns, clamped to the intersection
     # of a merged card's members' individual span limits.
     "dashboard_layout_wide": [
-        {"id": "rotator", "span": 2, "hidden": False},
-        {"id": "orchestrator", "span": 1, "hidden": False},
-        {"id": "tracking", "span": 1, "hidden": False},
-        {"id": "pass-plot", "span": 2, "hidden": False},
+        {"id": "rotator", "span": 1, "hidden": False},
+        {"id": "pass-plot", "span": 1, "hidden": False},
         {"id": "world-map", "span": 2, "hidden": False},
     ],
     "dashboard_layout_narrow": [
         {"id": "rotator", "hidden": False},
-        {"id": "orchestrator", "hidden": False},
-        {"id": "tracking", "hidden": False},
         {"id": "pass-plot", "hidden": False},
         {"id": "world-map", "hidden": False},
     ],
     # How many grid columns the wide layout uses -- 2 or 3.
-    "dashboard_columns": 3,
+    "dashboard_columns": 2,
     # "controlled" keeps the site-wide 75rem max-width on the dashboard;
     # "full" lets the dashboard grid use the full viewport width. Scoped to
     # index.html only via body.dashboard-page -- see style.css.

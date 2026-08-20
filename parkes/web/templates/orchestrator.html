@@ -40,6 +40,15 @@
       .band-reference-table { font-size: 0.8rem; color: var(--text-muted); line-height: 1.9; border-top: 1px solid var(--border); padding-top: 0.7rem; }
       .band-reference-table .freq-badge { margin-right: 0.5rem; min-width: 3.5rem; text-align: center; }
 
+      [data-downlink-list] { cursor: default; text-decoration: underline dotted var(--border); text-underline-offset: 3px; }
+      /* Wider than the plain single-frequency .freq-tooltip -- this one
+         lists every downlink (frequency/mode/app), which wraps awkwardly
+         at 16rem. */
+      .downlink-tooltip { max-width: 28rem; }
+      .downlink-tooltip-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0; color: var(--text-muted); }
+      .downlink-tooltip-row.is-active { color: var(--text); font-weight: 600; }
+      .downlink-tooltip-row .freq-badge { min-width: 3.2rem; text-align: center; }
+
       .profile-mode-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
       .profile-mode-row label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; font-weight: normal; }
       .profile-mode-row input[type="radio"] { width: auto; accent-color: var(--accent); }
@@ -75,6 +84,11 @@
       .module-advanced summary { cursor: pointer; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem; }
       .position-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; margin-bottom: 0.8rem; }
       .position-az-el { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+      .downlink-total-col { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: center; }
+
+      .antenna-bands-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+      .antenna-band-checkbox { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; font-weight: normal; border: 1px solid var(--border); border-radius: 8px; padding: 0.3rem 0.6rem; cursor: pointer; }
+      .antenna-band-checkbox input { width: auto; accent-color: var(--accent); }
       .table-scroll { overflow-x: auto; }
       table td { vertical-align: middle; }
       table td.actions-col { white-space: nowrap; text-align: right; }
@@ -105,6 +119,34 @@
 
     <section class="card">
       <div class="card-header">
+        <h2>Antennas</h2>
+        <span id="antennas-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+      <p class="hint">
+        Which physical receive chain is connected right now. Tracked Satellites' downlinks whose
+        band the active antenna can't receive are skipped as candidates entirely -- there's no
+        point winning a pass and running nothing. Nothing selected means no filtering.
+      </p>
+      <label class="field-label" for="active-antenna-select">Active antenna</label>
+      <select id="active-antenna-select" style="max-width: 22rem; margin-bottom: 1rem;"></select>
+
+      <div id="antennas-list-view">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Bands</th><th></th></tr>
+            </thead>
+            <tbody id="antennas-table-body"></tbody>
+          </table>
+        </div>
+        <button id="add-antenna-btn" type="button" class="btn-sm" style="margin-top: 0.8rem;">+ Add antenna</button>
+      </div>
+
+      <div id="antennas-edit-view" style="display: none;"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
         <h2>Tracked Satellites</h2>
         <span id="tracked-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
       </div>
@@ -119,7 +161,7 @@
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th></th><th>Satellite</th><th>Downlinks</th><th>Priority</th><th></th></tr>
+              <tr><th></th><th>Satellite</th><th>Downlinks</th><th>Total</th><th>Priority</th><th></th></tr>
             </thead>
             <tbody id="tracked-table-body"></tbody>
           </table>
@@ -154,7 +196,7 @@
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Name</th><th>Az / El</th><th>Downlinks</th><th></th><th></th></tr>
+              <tr><th>Name</th><th>Az / El</th><th>Downlinks</th><th>Total</th><th></th><th></th></tr>
             </thead>
             <tbody id="positions-table-body"></tbody>
           </table>

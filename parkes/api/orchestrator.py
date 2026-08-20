@@ -11,6 +11,13 @@ from parkes.sdr.app_profiles import delete_profile, load_profiles, put_profile
 from parkes.sdr.command_modules import list_command_modules
 from parkes.sdr.satdump_pipelines import list_all_pipelines, list_live_pipelines
 from parkes.standalone_apps import StandaloneAppRunner
+from parkes.tracking.antennas import (
+    active_bands,
+    delete_antenna,
+    downlink_band,
+    load_antennas,
+    put_antenna,
+)
 from parkes.tracking.sky import SkyTracker
 from parkes.tracking.static_positions import (
     delete_static_position,
@@ -50,6 +57,14 @@ class DownlinkRequest(BaseModel):
     # misconfiguration.
     gain: float | None = None
     bias: bool = False
+    # General band (e.g. "VHF"/"Ku-band" -- see web/static/bands.js),
+    # computed client-side from frequency and refreshed whenever it
+    # changes. Used to filter candidates against the active antenna's
+    # coverage (see tracking/antennas.active_bands and
+    # PassOrchestrator._candidate_passes) -- unset/unrecognized means the
+    # downlink is treated as unreachable whenever an antenna filter is
+    # active, since there's nothing to confirm it against.
+    band: str | None = None
     enabled: bool = True
 
 
@@ -98,6 +113,15 @@ class UpsertStaticPositionRequest(BaseModel):
     # go_static_position()). The app must be "standalone"-mode, since a
     # static position is never pass-triggered.
     downlinks: list[DownlinkRequest] = []
+
+
+class UpsertAntennaRequest(BaseModel):
+    name: str
+    # General band names (see web/static/bands.js) this antenna/LNB can
+    # receive. Empty means unconfigured -- see antennas.active_bands(),
+    # which fails open (no filtering) rather than treating that as "covers
+    # nothing".
+    bands: list[str] = []
 
 
 def _orchestrator(request: Request) -> PassOrchestrator:
@@ -182,6 +206,23 @@ def delete_object(norad: int):
 @router.post("/objects/{norad}/move")
 def move_object(norad: int, body: MoveObjectRequest):
     move_tracked_object(norad, body.direction)
+    return {"status": "ok"}
+
+
+@router.get("/antennas")
+def get_antennas():
+    return load_antennas()
+
+
+@router.put("/antennas/{antenna_id}")
+def put_antenna_route(antenna_id: str, body: UpsertAntennaRequest):
+    put_antenna(antenna_id, body.model_dump())
+    return {"status": "ok"}
+
+
+@router.delete("/antennas/{antenna_id}")
+def delete_antenna_route(antenna_id: str):
+    delete_antenna(antenna_id)
     return {"status": "ok"}
 
 
@@ -284,6 +325,7 @@ def _effective_downlinks(position: dict) -> list[dict]:
             "baud": None,
             "gain": None,
             "bias": False,
+            "band": None,
             "enabled": True,
         }
     ]
@@ -333,11 +375,20 @@ def delete_static_position_route(position_id: str):
 
 def _active_downlink(position: dict) -> dict | None:
     """Same "first enabled wins" convention as PassOrchestrator's own
-    downlink selection (see _candidate_passes/_rank) -- there's no AOS/
-    priority competition for a static position, but reusing it keeps
-    "which one is active" predictable and consistent with Tracked
-    Satellites."""
-    return next((d for d in _effective_downlinks(position) if d.get("enabled", True)), None)
+    downlink selection (see _candidate_passes/_rank), including its active-
+    antenna band filter -- there's no AOS/priority competition for a
+    static position, but reusing it keeps "which one is active" predictable
+    and consistent with Tracked Satellites, and there's no more point
+    "Go"-ing to a position and launching an app whose downlink the current
+    antenna can't receive than there is winning a pass for one."""
+    bands = active_bands()
+    for d in _effective_downlinks(position):
+        if not d.get("enabled", True):
+            continue
+        if bands is not None and downlink_band(d) not in bands:
+            continue
+        return d
+    return None
 
 
 @router.post("/static_positions/{position_id}/go")

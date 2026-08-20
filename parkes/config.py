@@ -112,6 +112,13 @@ class Settings(BaseSettings):
     # launch a standalone app" shortcuts. See tracking/static_positions.py.
     static_positions_file: str = "data/tracking/static_positions.json"
 
+    # Physical receive chains (name -> which general bands, e.g. "VHF"/
+    # "Ku-band", it can receive) -- see tracking/antennas.py. The
+    # "active_antenna_id" preference selects which one is connected right
+    # now, filtering the Pass Orchestrator's candidate downlinks down to
+    # ones that band covers.
+    antennas_file: str = "data/tracking/antennas.json"
+
     # SatNOGS DB (https://db.satnogs.org/) satellite/transmitter lookup for
     # the Tracked Objects editor (see parkes/satnogs/) -- lets downlink
     # frequencies/modes be searched instead of hand-typed. Responses are

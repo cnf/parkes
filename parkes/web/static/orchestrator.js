@@ -51,6 +51,15 @@
     return { el, update };
   }
 
+  // General band for a downlink's stored frequency (e.g. "VHF"/"Ku-band"),
+  // computed fresh at save time -- sent to the backend so
+  // PassOrchestrator._candidate_passes() can filter against the active
+  // antenna's coverage without duplicating ParkesBands' range table
+  // server-side. null for an unrecognized/invalid frequency.
+  function bandForDownlink(frequencyHz) {
+    return window.ParkesBands.detect(Number(frequencyHz))?.band ?? null;
+  }
+
   function slugify(text) {
     return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "profile";
   }
@@ -1008,6 +1017,263 @@
   }
 
   // ---------------------------------------------------------------------
+  // Antennas -- which physical receive chain is connected right now, and
+  // what general bands (see bands.js) each one can receive. The active
+  // one filters which Tracked Satellites downlinks the Pass Orchestrator
+  // will even consider -- see tracking/antennas.py's active_bands() and
+  // PassOrchestrator._candidate_passes().
+  // ---------------------------------------------------------------------
+
+  const antennasListView = document.getElementById("antennas-list-view");
+  const antennasEditView = document.getElementById("antennas-edit-view");
+  const antennasTableBody = document.getElementById("antennas-table-body");
+  const addAntennaBtn = document.getElementById("add-antenna-btn");
+  const antennasStatus = document.getElementById("antennas-status");
+  const activeAntennaSelect = document.getElementById("active-antenna-select");
+
+  let antennas = [];
+  let antennasEditIndex = null;
+  let antennasEditSnapshot = null;
+  let activeAntennaId = null;
+
+  async function loadAntennas() {
+    const data = await apiFetch("/api/orchestrator/antennas");
+    antennas = Object.entries(data).map(([id, a]) => ({ id, name: a.name || id, bands: a.bands || [] }));
+  }
+
+  async function loadActiveAntenna() {
+    const data = await apiFetch("/api/settings");
+    activeAntennaId = data.preferences.active_antenna_id || null;
+  }
+
+  function renderActiveAntennaSelect() {
+    activeAntennaSelect.innerHTML = "";
+    const noneOpt = document.createElement("option");
+    noneOpt.value = "";
+    noneOpt.textContent = "None connected -- no band filtering";
+    activeAntennaSelect.appendChild(noneOpt);
+    for (const a of antennas) {
+      const opt = document.createElement("option");
+      opt.value = a.id;
+      opt.textContent = a.name;
+      activeAntennaSelect.appendChild(opt);
+    }
+    activeAntennaSelect.value = activeAntennaId && antennas.some((a) => a.id === activeAntennaId) ? activeAntennaId : "";
+  }
+
+  activeAntennaSelect.addEventListener("change", async () => {
+    const value = activeAntennaSelect.value || null;
+    try {
+      await apiFetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active_antenna_id: value }),
+      });
+      activeAntennaId = value;
+      flashStatus(antennasStatus, "active antenna updated", false);
+    } catch (err) {
+      flashStatus(antennasStatus, `error: ${err.message}`, true);
+      renderActiveAntennaSelect();
+    }
+  });
+
+  function assignAntennaId(antenna) {
+    if (antenna.id) return antenna.id;
+    const taken = new Set(antennas.filter((a) => a.id).map((a) => a.id));
+    antenna.id = uniqueId(slugify(antenna.name), taken);
+    return antenna.id;
+  }
+
+  async function saveAntenna(antenna) {
+    assignAntennaId(antenna);
+    await apiFetch(`/api/orchestrator/antennas/${encodeURIComponent(antenna.id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: antenna.name.trim(), bands: antenna.bands }),
+    });
+    flashStatus(antennasStatus, "saved", false);
+  }
+
+  async function deleteAntenna(id) {
+    await apiFetch(`/api/orchestrator/antennas/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  function validateAntenna(antenna) {
+    if (!antenna.name.trim()) return "every antenna needs a name";
+    return null;
+  }
+
+  function renderAntennasList() {
+    antennasListView.style.display = "";
+    antennasEditView.style.display = "none";
+    antennasEditView.innerHTML = "";
+    antennasTableBody.innerHTML = "";
+    renderActiveAntennaSelect();
+
+    if (antennas.length === 0) {
+      antennasTableBody.innerHTML =
+        '<tr><td colspan="3" class="hint">No antennas defined yet -- without one selected, every downlink is considered reachable.</td></tr>';
+      return;
+    }
+
+    antennas.forEach((antenna, index) => {
+      const row = document.createElement("tr");
+
+      const nameTd = document.createElement("td");
+      nameTd.textContent = antenna.name;
+
+      const bandsTd = document.createElement("td");
+      if (antenna.bands.length === 0) {
+        bandsTd.className = "hint";
+        bandsTd.textContent = "no bands set";
+      } else {
+        const known = window.ParkesBands.generalBands();
+        for (const band of antenna.bands) {
+          const info = known.find((b) => b.band === band);
+          const badge = document.createElement("span");
+          badge.className = `freq-badge c-${info ? info.color : "gray"}`;
+          badge.style.marginRight = "0.3rem";
+          badge.textContent = band;
+          bandsTd.appendChild(badge);
+        }
+      }
+
+      const editTd = document.createElement("td");
+      editTd.className = "actions-col";
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn-sm";
+      editBtn.textContent = "Edit";
+      editBtn.addEventListener("click", () => enterAntennaEdit(index));
+      editTd.appendChild(editBtn);
+
+      row.append(nameTd, bandsTd, editTd);
+      antennasTableBody.appendChild(row);
+    });
+  }
+
+  function enterAntennaEdit(index) {
+    antennasEditIndex = index;
+    antennasEditSnapshot = JSON.parse(JSON.stringify(antennas[index]));
+    renderAntennaEdit();
+  }
+
+  function exitAntennaEdit(keepChanges) {
+    if (!keepChanges) {
+      antennas[antennasEditIndex] = antennasEditSnapshot;
+    }
+    antennasEditIndex = null;
+    antennasEditSnapshot = null;
+    renderAntennasList();
+  }
+
+  function renderAntennaEdit() {
+    antennasListView.style.display = "none";
+    antennasEditView.style.display = "";
+    antennasEditView.innerHTML = "";
+    const antenna = antennas[antennasEditIndex];
+
+    const topRow = document.createElement("div");
+    topRow.className = "row";
+    topRow.style.marginBottom = "0";
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = "btn-sm";
+    backBtn.textContent = "← Back";
+    backBtn.addEventListener("click", () => exitAntennaEdit(false));
+    topRow.appendChild(backBtn);
+    antennasEditView.appendChild(topRow);
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "edit-name-input";
+    nameInput.placeholder = "antenna/LNB name";
+    nameInput.value = antenna.name;
+    nameInput.addEventListener("input", () => {
+      antenna.name = nameInput.value;
+    });
+    antennasEditView.appendChild(nameInput);
+
+    const bandsLabel = document.createElement("div");
+    bandsLabel.className = "field-label";
+    bandsLabel.textContent = "Receivable bands";
+    antennasEditView.appendChild(bandsLabel);
+
+    const bandsRow = document.createElement("div");
+    bandsRow.className = "antenna-bands-row";
+    for (const b of window.ParkesBands.generalBands()) {
+      const label = document.createElement("label");
+      label.className = "antenna-band-checkbox";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = antenna.bands.includes(b.band);
+      cb.addEventListener("change", () => {
+        antenna.bands = cb.checked ? [...antenna.bands, b.band] : antenna.bands.filter((x) => x !== b.band);
+      });
+      const badge = document.createElement("span");
+      badge.className = `freq-badge c-${b.color}`;
+      badge.textContent = b.band;
+      label.append(cb, badge);
+      bandsRow.appendChild(label);
+    }
+    antennasEditView.appendChild(bandsRow);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "row";
+    actionsRow.style.marginTop = "1rem";
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "primary";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", async () => {
+      const error = validateAntenna(antenna);
+      if (error) {
+        flashStatus(antennasStatus, error, true);
+        return;
+      }
+      try {
+        await saveAntenna(antenna);
+      } catch (err) {
+        flashStatus(antennasStatus, `error: ${err.message}`, true);
+        return;
+      }
+      exitAntennaEdit(true);
+    });
+    actionsRow.appendChild(saveBtn);
+    antennasEditView.appendChild(actionsRow);
+
+    // Kept apart from Save/Back, deliberately not front-and-center --
+    // deletes should be rare and a little deliberate to reach.
+    const dangerRow = document.createElement("div");
+    dangerRow.className = "row";
+    dangerRow.style.marginTop = "1.5rem";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn-sm";
+    deleteBtn.textContent = "Delete this antenna";
+    deleteBtn.addEventListener("click", async () => {
+      try {
+        if (antenna.id) await deleteAntenna(antenna.id);
+      } catch (err) {
+        flashStatus(antennasStatus, `error: ${err.message}`, true);
+        return;
+      }
+      antennas.splice(antennasEditIndex, 1);
+      if (activeAntennaId === antenna.id) activeAntennaId = null;
+      antennasEditIndex = null;
+      antennasEditSnapshot = null;
+      renderAntennasList();
+    });
+    dangerRow.appendChild(deleteBtn);
+    antennasEditView.appendChild(dangerRow);
+  }
+
+  addAntennaBtn.addEventListener("click", () => {
+    antennas.push({ id: null, name: "", bands: [] });
+    enterAntennaEdit(antennas.length - 1);
+  });
+
+  // ---------------------------------------------------------------------
   // Tracked Satellites
   // ---------------------------------------------------------------------
 
@@ -1027,10 +1293,54 @@
     return profile ? profile.name : id;
   }
 
+  // General band for a downlink, preferring its stored value but falling
+  // back to deriving it from frequency -- same fallback reasoning as
+  // tracking/antennas.py's downlink_band() (a downlink saved before the
+  // "band" field existed shouldn't look unrecognized here either).
+  function effectiveBand(downlink) {
+    return downlink.band || bandForDownlink(downlink.frequency);
+  }
+
+  // Mirrors tracking/antennas.py's active_bands() -- null means no
+  // filtering, whether because nothing's selected or the selected antenna
+  // has no bands assigned.
+  function currentActiveBands() {
+    if (!activeAntennaId) return null;
+    const antenna = antennas.find((a) => a.id === activeAntennaId);
+    if (!antenna || antenna.bands.length === 0) return null;
+    return new Set(antenna.bands);
+  }
+
+  // The one downlink PassOrchestrator._candidate_passes() would actually
+  // pick for a pass right now: the first enabled one, narrowed to the
+  // first whose band the active antenna can receive if one's selected.
+  // null when every enabled downlink is filtered out by the current
+  // antenna (not the same as "no enabled downlinks" -- callers that care
+  // about the distinction check obj.downlinks themselves).
+  function effectiveDownlink(downlinks) {
+    const enabled = downlinks.filter((d) => d.enabled !== false);
+    if (enabled.length === 0) return null;
+    const bands = currentActiveBands();
+    if (!bands) return enabled[0];
+    return enabled.find((d) => bands.has(effectiveBand(d))) || null;
+  }
+
+  function describeDownlink(d) {
+    const freq = (d.frequency / 1e6).toFixed(3) + " MHz";
+    const upFreq = d.up_frequency ? ` / ↑${(d.up_frequency / 1e6).toFixed(3)} MHz` : "";
+    const label = d.mode ? `${freq}${upFreq} (${d.mode})` : `${freq}${upFreq}`;
+    const withApp = d.app ? `${label} → ${profileName(d.app)}` : label;
+    return d.enabled === false ? `${withApp} (disabled)` : withApp;
+  }
+
   // Hz to hang a band badge/tooltip off of, when the summary boils down to
-  // a single unambiguous frequency -- multiple downlinks collapse to
-  // "N downlinks" with nothing specific to point at.
-  function primaryFrequencyHz(obj) {
+  // a single unambiguous frequency. Under preferActive this always goes
+  // through effectiveDownlink() -- even a lone downlink can be filtered
+  // out by the active antenna, same as PassOrchestrator/_active_downlink()
+  // would treat it, so "one downlink" isn't automatically "the shown one"
+  // the way it is when preferActive is off.
+  function primaryFrequencyHz(obj, { preferActive } = {}) {
+    if (preferActive) return effectiveDownlink(obj.downlinks)?.frequency ?? null;
     return obj.downlinks.length === 1 ? obj.downlinks[0].frequency : null;
   }
 
@@ -1038,9 +1348,32 @@
   // single unambiguous frequency, a visible band badge (not just a hover
   // tooltip -- a tiny hover-only indicator turned out to be easy to miss
   // entirely) and a data-freq-hz for freq-tooltip.js's precise-MHz popover.
-  function renderDownlinkCell(td, obj) {
-    td.textContent = downlinkSummary(obj);
-    const hz = primaryFrequencyHz(obj);
+  //
+  // preferActive (both Tracked Satellites and Static Positions -- see
+  // _active_downlink()/_candidate_passes(), both apply the same active-
+  // antenna band filter) shows the one downlink that would actually be
+  // used instead of just listing/counting them, and sets a
+  // data-downlink-list for the hover popover below to show the rest (or,
+  // for a single downlink that got filtered out, to show what it actually
+  // is). The total count itself is a separate table column now (see
+  // renderTrackedList()/renderPositionsList()), not part of this text.
+  function renderDownlinkCell(td, obj, { preferActive } = {}) {
+    td.textContent = downlinkSummary(obj, { preferActive });
+    if (preferActive && obj.downlinks.length > 0) {
+      const active = effectiveDownlink(obj.downlinks);
+      td.dataset.downlinkList = JSON.stringify(
+        obj.downlinks.map((d) => {
+          const match = window.ParkesBands.detect(Number(d.frequency));
+          return {
+            text: describeDownlink(d),
+            active: d === active,
+            band: match ? match.band : null,
+            color: match ? match.color : "gray",
+          };
+        })
+      );
+    }
+    const hz = primaryFrequencyHz(obj, { preferActive });
     if (!hz) return;
     td.dataset.freqHz = hz;
     const badge = createFreqBadge(() => hz);
@@ -1050,18 +1383,88 @@
     }
   }
 
-  function downlinkSummary(obj) {
+  // The total-downlink-count column carries the count now, so this only
+  // needs the one line that's actually in play.
+  function downlinkSummary(obj, { preferActive } = {}) {
     if (obj.downlinks.length === 0) return "no downlinks";
-    if (obj.downlinks.length === 1) {
-      const d = obj.downlinks[0];
-      const freq = (d.frequency / 1e6).toFixed(3) + " MHz";
-      const upFreq = d.up_frequency ? ` / ↑${(d.up_frequency / 1e6).toFixed(3)} MHz` : "";
-      const label = d.mode ? `${freq}${upFreq} (${d.mode})` : `${freq}${upFreq}`;
-      const withApp = d.app ? `${label} → ${profileName(d.app)}` : label;
-      return d.enabled === false ? `${withApp} (disabled)` : withApp;
+    if (!preferActive) {
+      return obj.downlinks.length === 1 ? describeDownlink(obj.downlinks[0]) : `${obj.downlinks.length} downlinks`;
     }
-    return `${obj.downlinks.length} downlinks`;
+    const active = effectiveDownlink(obj.downlinks);
+    return active ? describeDownlink(active) : "none matching";
   }
+
+  // Hover-reveal for the collapsed "(N total)" summary above -- mirrors
+  // freq-tooltip.js's delegated, single-shared-popover approach, but the
+  // content here is a whole downlink list rather than one frequency's
+  // band, so it's simplest kept local to this page instead of
+  // generalizing freq-tooltip.js for a one-off caller.
+  let downlinkTooltipEl = null;
+  let downlinkTooltipShowTimer = null;
+  let downlinkTooltipHideTimer = null;
+
+  function ensureDownlinkTooltipEl() {
+    if (downlinkTooltipEl) return downlinkTooltipEl;
+    downlinkTooltipEl = document.createElement("div");
+    downlinkTooltipEl.className = "freq-tooltip downlink-tooltip";
+    downlinkTooltipEl.style.display = "none";
+    downlinkTooltipEl.addEventListener("mouseenter", () => clearTimeout(downlinkTooltipHideTimer));
+    downlinkTooltipEl.addEventListener("mouseleave", scheduleDownlinkTooltipHide);
+    document.body.appendChild(downlinkTooltipEl);
+    return downlinkTooltipEl;
+  }
+
+  function showDownlinkTooltip(target) {
+    let entries;
+    try {
+      entries = JSON.parse(target.dataset.downlinkList);
+    } catch {
+      return;
+    }
+    const el = ensureDownlinkTooltipEl();
+    el.innerHTML = entries
+      .map((e) => {
+        const badge = e.band ? `<span class="freq-badge c-${e.color}">${escapeHtml(e.band)}</span> ` : "";
+        return `<div class="downlink-tooltip-row${e.active ? " is-active" : ""}">${badge}${escapeHtml(e.text)}</div>`;
+      })
+      .join("");
+    el.style.display = "block";
+    const rect = target.getBoundingClientRect();
+    const tipRect = el.getBoundingClientRect();
+    let top = rect.bottom + 6;
+    let left = rect.left;
+    if (left + tipRect.width > window.innerWidth - 8) left = window.innerWidth - tipRect.width - 8;
+    if (top + tipRect.height > window.innerHeight - 8) top = rect.top - tipRect.height - 6;
+    el.style.top = `${Math.max(8, top)}px`;
+    el.style.left = `${Math.max(8, left)}px`;
+  }
+
+  function hideDownlinkTooltip() {
+    if (downlinkTooltipEl) downlinkTooltipEl.style.display = "none";
+  }
+
+  function scheduleDownlinkTooltipHide() {
+    clearTimeout(downlinkTooltipHideTimer);
+    downlinkTooltipHideTimer = setTimeout(hideDownlinkTooltip, 150);
+  }
+
+  document.addEventListener("mouseover", (event) => {
+    const target = event.target.closest("[data-downlink-list]");
+    if (!target) return;
+    clearTimeout(downlinkTooltipHideTimer);
+    clearTimeout(downlinkTooltipShowTimer);
+    downlinkTooltipShowTimer = setTimeout(() => showDownlinkTooltip(target), 350);
+  });
+
+  document.addEventListener("mouseout", (event) => {
+    const target = event.target.closest("[data-downlink-list]");
+    if (!target) return;
+    if (target.contains(event.relatedTarget)) return;
+    clearTimeout(downlinkTooltipShowTimer);
+    scheduleDownlinkTooltipHide();
+  });
+
+  document.addEventListener("scroll", hideDownlinkTooltip, true);
 
   // PUTs/DELETEs by norad, one satellite at a time -- never the whole
   // list, so a bug in this flow can only ever touch the satellite being
@@ -1079,6 +1482,7 @@
         baud: downlink.baud ?? null,
         gain: downlink.gain ?? null,
         bias: downlink.bias === true,
+        band: bandForDownlink(downlink.frequency),
         enabled: downlink.enabled !== false,
       })),
     };
@@ -1116,7 +1520,7 @@
     trackedTableBody.innerHTML = "";
 
     if (trackedObjects.length === 0) {
-      trackedTableBody.innerHTML = `<tr><td colspan="5" class="hint">No satellites tracked yet -- search below to add one.</td></tr>`;
+      trackedTableBody.innerHTML = `<tr><td colspan="6" class="hint">No satellites tracked yet -- search below to add one.</td></tr>`;
       return;
     }
 
@@ -1142,7 +1546,11 @@
       nameTd.innerHTML = `${escapeHtml(obj.name)} <span class="tracked-norad">(${obj.norad})</span>`;
 
       const downlinkTd = document.createElement("td");
-      renderDownlinkCell(downlinkTd, obj);
+      renderDownlinkCell(downlinkTd, obj, { preferActive: true });
+
+      const totalTd = document.createElement("td");
+      totalTd.className = "downlink-total-col";
+      totalTd.textContent = obj.downlinks.length || "";
 
       const priorityTd = document.createElement("td");
       priorityTd.style.whiteSpace = "nowrap";
@@ -1171,7 +1579,7 @@
       editBtn.addEventListener("click", () => enterTrackedEdit(index));
       editTd.appendChild(editBtn);
 
-      row.append(cbTd, nameTd, downlinkTd, priorityTd, editTd);
+      row.append(cbTd, nameTd, downlinkTd, totalTd, priorityTd, editTd);
       trackedTableBody.appendChild(row);
     });
   }
@@ -1728,6 +2136,7 @@
         baud: downlink.baud ?? null,
         gain: downlink.gain ?? null,
         bias: downlink.bias === true,
+        band: downlink.band ?? null,
         enabled: downlink.enabled !== false,
       })),
     }));
@@ -1832,6 +2241,7 @@
         baud: d.baud ?? null,
         gain: d.gain ?? null,
         bias: d.bias === true,
+        band: d.band ?? null,
         enabled: d.enabled !== false,
       })),
     }));
@@ -1844,12 +2254,14 @@
     return position.id;
   }
 
-  // Same "first enabled wins" convention as the Pass Orchestrator's own
-  // downlink selection (see PassOrchestrator._candidate_passes/_rank) --
-  // there's no AOS/priority competition here, but reusing it keeps "which
-  // one is active" predictable the same way across both editors.
+  // Same selection as the Pass Orchestrator's own (see
+  // PassOrchestrator._candidate_passes/_rank and api/orchestrator.py's
+  // _active_downlink) -- first enabled, further narrowed by the active
+  // antenna's band if one's selected. Kept in sync with effectiveDownlink()
+  // so what this shows (Stop button visibility, the downlink summary) is
+  // always what "Go" would actually launch.
   function activePositionDownlink(position) {
-    return (position.downlinks || []).find((d) => d.enabled !== false) || null;
+    return effectiveDownlink(position.downlinks || []);
   }
 
   async function savePosition(position) {
@@ -1866,6 +2278,7 @@
         baud: d.baud ?? null,
         gain: d.gain ?? null,
         bias: d.bias === true,
+        band: bandForDownlink(d.frequency),
         enabled: d.enabled !== false,
       })),
       ...(position.positionMode === "latlon"
@@ -1920,7 +2333,7 @@
     positionsTableBody.innerHTML = "";
 
     if (staticPositions.length === 0) {
-      positionsTableBody.innerHTML = `<tr><td colspan="5" class="hint">No static positions yet.</td></tr>`;
+      positionsTableBody.innerHTML = `<tr><td colspan="6" class="hint">No static positions yet.</td></tr>`;
       return;
     }
 
@@ -1936,7 +2349,11 @@
       azElTd.textContent = `${position.az.toFixed(1)}° / ${position.el.toFixed(1)}°`;
 
       const downlinkTd = document.createElement("td");
-      renderDownlinkCell(downlinkTd, position);
+      renderDownlinkCell(downlinkTd, position, { preferActive: true });
+
+      const totalTd = document.createElement("td");
+      totalTd.className = "downlink-total-col";
+      totalTd.textContent = position.downlinks.length || "";
 
       const active = activePositionDownlink(position);
 
@@ -1985,7 +2402,7 @@
       editBtn.addEventListener("click", () => enterPositionEdit(index));
       editTd.appendChild(editBtn);
 
-      row.append(nameTd, azElTd, downlinkTd, actionsTd, editTd);
+      row.append(nameTd, azElTd, downlinkTd, totalTd, actionsTd, editTd);
       positionsTableBody.appendChild(row);
       applyPositionStatus(row, active && active.app);
     });
@@ -2367,10 +2784,13 @@
       loadSatdumpPipelines(),
       loadCommandModules(),
       loadStaticPositions(),
+      loadAntennas(),
+      loadActiveAntenna(),
     ]);
     renderProfilesList();
     renderTrackedList();
     renderPositionsList();
+    renderAntennasList();
     await refreshStandaloneStatus();
   }
 

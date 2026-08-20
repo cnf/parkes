@@ -40,6 +40,14 @@
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 0 0.8rem;
       }
 
+      /* Wider than the default .modal-dialog -- a flex-wrapped row of
+         antenna names cramped fast, and will only get more crowded as
+         more antennas are added. A plain vertical list (one per line)
+         scales with that better than trying to wrap a row ever wider. */
+      #antenna-modal-overlay .modal-dialog { max-width: 34rem; }
+      #antenna-modal-options { display: flex; flex-direction: column; gap: 0.6rem; margin: 0.8rem 0 1rem; }
+      #antenna-modal-options label { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+      #antenna-modal-options input[type="radio"] { width: auto; accent-color: var(--accent); }
     </style>
 {% endblock %}
 
@@ -124,7 +132,10 @@
     <div class="card" data-group-id="orchestrator">
     <section class="widget" data-widget-id="orchestrator">
       <div class="card-header">
-        <h2>Pass Orchestrator</h2>
+        <div class="card-header-title">
+          <h2>Pass Orchestrator</h2>
+          <a href="/orchestrator" class="back-link">Manage</a>
+        </div>
         <span class="status-pill"><span class="status-dot" id="orchestrator-dot"></span><span id="orchestrator-status"></span></span>
       </div>
       <p class="log-preview" id="orchestrator-last-line">&nbsp;</p>
@@ -132,7 +143,7 @@
       <p class="hint" id="orchestrator-app-error" style="color: var(--danger);"></p>
       <div class="row">
         <button id="orchestrator-toggle-btn" class="primary" type="button" disabled>Start</button>
-        <a href="/orchestrator" class="back-link">Manage orchestrator &rarr;</a>
+        <button id="antenna-btn" class="back-link" type="button" style="margin-left: auto;">&#128225; --</button>
       </div>
     </section>
     </div>
@@ -194,7 +205,7 @@
             <div><span class="lab">Az</span><span class="val"><span id="pass-plot-az">--</span><span class="unit">&deg;</span></span></div>
             <div><span class="lab">El</span><span class="val"><span id="pass-plot-el">--</span><span class="unit">&deg;</span></span></div>
           </div>
-          <div>
+          <div class="countdown-block">
             <span class="countdown-lab" id="pass-plot-countdown-lab">AOS in</span>
             <div class="countdown" id="pass-plot-countdown">--:--:--</div>
           </div>
@@ -224,6 +235,27 @@
     </section>
     </div>
     </div>
+
+    <div id="antenna-modal-overlay" class="modal-overlay">
+      <div class="modal-dialog">
+        <div class="card-header">
+          <h2>Active Antenna</h2>
+          <button id="antenna-modal-close" type="button" class="btn-sm">&times;</button>
+        </div>
+        <p class="hint">
+          Which physical receive chain is connected right now -- Tracked Satellites' downlinks
+          whose band it can't receive are skipped by the Pass Orchestrator rather than winning a
+          pass and running nothing. Manage the antenna list itself on the
+          <a href="/orchestrator">Pass Orchestrator page</a>.
+        </p>
+        <div id="antenna-modal-options"></div>
+        <p class="hint" id="antenna-modal-status"></p>
+        <div class="row" style="margin-top: 1rem;">
+          <button id="antenna-modal-save-btn" class="primary" type="button">Save</button>
+          <button id="antenna-modal-cancel-btn" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
 {% endblock %}
 
 {% block scripts %}
@@ -233,4 +265,5 @@
     <script src="/static/pass-plot.js"></script>
     <script src="/static/world-map.js"></script>
     <script src="/static/orchestrator-status.js"></script>
+    <script src="/static/antenna-select.js"></script>
 {% endblock %}

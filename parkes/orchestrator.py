@@ -6,6 +6,7 @@ from parkes.preferences import preferences
 from parkes.process import ManagedProcess
 from parkes.sdr.app_profiles import load_profiles, resolve_command
 from parkes.sdr.arbiter import SdrArbiter
+from parkes.tracking.antennas import active_bands, downlink_band
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
 from parkes.tracking.tracked_objects import load_tracked_objects
@@ -124,8 +125,17 @@ class PassOrchestrator:
         """Every enabled downlink's next_pass() -- see SkyTracker.next_pass
         for what "synthesized" means. `priority` is the owning tracked
         object's position in tracked_objects.json.
+
+        A downlink whose band the active antenna can't receive (see
+        tracking/antennas.active_bands) is skipped here too, same as a
+        disabled one -- there's no point winning a pass and running
+        nothing, when a lower-priority but actually-receivable satellite
+        could have used the dish instead. If a satellite's every downlink
+        gets filtered out this way, it simply never becomes a candidate
+        this cycle.
         """
         min_elevation = preferences.get("orchestrator_min_elevation")
+        bands = active_bands()
         candidates: list[_Candidate] = []
         for priority, obj in enumerate(load_tracked_objects()):
             if not obj.get("enabled", True):
@@ -133,6 +143,8 @@ class PassOrchestrator:
             target_id = f"sat:{obj['norad']}"
             for downlink in obj.get("downlinks", []):
                 if not downlink.get("enabled", True):
+                    continue
+                if bands is not None and downlink_band(downlink) not in bands:
                     continue
                 try:
                     pass_info = self._sky.next_pass(target_id, min_elevation=min_elevation)
