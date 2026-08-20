@@ -1,49 +1,24 @@
 # Parkes
 
-A web app for driving a motorized parabolic dish: rotator control, satellite/radio tracking, and SDR/satdump orchestration, built for a Raspberry Pi.
+**Turn a Raspberry Pi and a motorized dish into a fully automated satellite ground station.**
 
-It's a Python/FastAPI app (server-rendered Jinja2 + htmx, no SPA build step). It doesn't reimplement rotator control, orbital mechanics, or signal decoding -- it orchestrates existing, well-tested tools instead:
+Parkes ties together rotator control, orbital tracking, SDR management, and satellite pass decoding into a single web dashboard — no soldering required. It uses existing open source tools (Hamlib, skyfield, satdump, SoapySDR) so you don't have to reimplement any of them.
 
-- **[Hamlib](https://hamlib.github.io/)'s `rotctld`** is the only thing that speaks serial EasyCommII to the rotator hardware. Parkes starts and supervises it itself (crash-restart with backoff, kept up for the app's whole runtime) -- see `parkes/infra_supervisor.py`.
-- **[satdump](https://github.com/SatDump/SatDump)** owns satellite pass capture/decode, launched as an ordinary user-configured "app profile" for the duration of a pass.
-- **[skyfield](https://rhodesmill.org/skyfield/)** computes az/el for satellites (from TLEs) and fixed radio sources (Sun, Moon, Cas A, ...) alike.
-- **gpsd** (or a real GPS dongle) can feed the observer's live lat/lon/elevation instead of a fixed location.
-- **SoapySDR** exposes whatever SDR is attached, either to Parkes's own launched commands or, via SoapyRemote, directly to a laptop running gpredict/gqrx/satdump.
+## What it does
 
-## Quickstart (development)
+- **Point your dish anywhere.** Parkes drives an EasyCommII rotator via Hamlib's `rotctld`, with automatic crash-restart and live reconfiguration — no restart needed.
+- **Track anything in the sky.** Computes az/el for satellites (from TLEs) and fixed sources (Sun, Moon, Cas A) using skyfield. Follows passes in real time.
+- **Decode satellite passes automatically.** Launches satdump (or any other command) as an orchestrated app for the duration of a pass, with pass prediction and scheduling built in.
+- **Use whatever SDR you have.** Exposes SoapySDR devices to satdump, or shares them over SoapyRemote to a remote laptop running gpredict/gqrx.
+- **Live GPS location.** Feeds gpsd for real-time lat/lon/elevation, or use fixed coordinates.
 
-The dev environment is managed by [devenv](https://devenv.sh/) (Nix), which provisions Python, Hamlib, satdump, SoapySDR, and gpsd/gpsfake together:
 
-```bash
-devenv up
-```
+## Hardware
 
-This starts the web app at `http://localhost:8000` (uvicorn, auto-reloading) alongside a fake GPS source. Rotator hardware defaults to Hamlib's dummy backend (`rotator_model=1`) so the UI works with nothing physically attached -- see [Configuration](#configuration) below for pointing it at a real EasyCommII controller.
-
+Any computer or Raspberry Pi + an EasyCommII rotator controller + an SDR dongle (RTL-SDR, HackRF, etc.) + a motorized dish mount. Optional: USB GPS dongle.
 
 ## Install
-
-### Packages
-
-- libhamlib-tools
-- soapysdr-module-all
-- satdump
-- gpsd
-
-### Optional packages
-
-- rtl-sdr
-- hackrf
-- ...
-
-## Configuration
-
-Two layers, deliberately kept separate:
-
-- **Bootstrap-only environment variables** (`PARKES_*`, see `parkes/config.py`, optionally via a `.env` file) -- deploy-time/filesystem concerns: binary paths, data directories, and the *fresh-deploy starting point* for everything else. They only matter before `data/preferences.json` exists; once the app has run once, the UI value wins and the env var is ignored.
-- **The Settings page** (`/settings`) -- everything you'd actually want to change without a restart: observer location, tracking cadence, rotator/gpsd process management (managed on/off, host to connect to, bind address, model, serial device, timeout/retry tuning), SDR parameters, SoapyRemote. Stored in `data/preferences.json`, edited at runtime, and saves take effect immediately (`InfraSupervisor.reconfigure()` restarts just the affected daemon; `RotctldClient`/`GpsdClient.reconfigure()` repoints the live connection).
-
-See [docs/deploy.md](docs/deploy.md) for running on the actual Pi (systemd unit, permissions) rather than under devenv.
+See [docs/deploy.md](docs/deploy.md).
 
 ## Screenshots
 
