@@ -22,13 +22,32 @@ class TrackingScheduler:
         self._rotator = rotator
         self._task: asyncio.Task | None = None
         self.active_target: str | None = None
+        # The raw id (e.g. "sat:25544"), alongside active_target's already-
+        # resolved display name -- kept separately since active_target
+        # alone can't be turned back into something compute_azel() accepts.
+        # See api/tracking.py's /targets route, which uses this to keep the
+        # actively-tracked target showing on the dashboard even when it
+        # isn't (or is no longer) part of any enabled group.
+        self.active_target_id: str | None = None
         self.last_error: str | None = None
 
-    def start(self, target_id: str) -> None:
-        if target_id not in self._sky.target_names():
+    def start(self, target_id: str, *, require_enabled: bool = True) -> None:
+        """require_enabled gates against SkyTracker.target_names() -- the
+        Satellites page's enabled-groups/fixed-targets allowlist. That's
+        deliberate curation for the dashboard's manual "Track" button (see
+        satellites.html), but it has nothing to do with the Pass
+        Orchestrator's own tracked_objects.json, a completely separate
+        list with its own "enabled" flags. PassOrchestrator passes False,
+        since a satellite it's allowed to schedule shouldn't also have to
+        be in some unrelated group just to actually get tracked --
+        compute_azel()/display_name() below work off the full TLE catalog
+        either way, group membership doesn't affect them.
+        """
+        if require_enabled and target_id not in self._sky.target_names():
             raise KeyError(target_id)
         self.stop()
         self.active_target = self._sky.display_name(target_id)
+        self.active_target_id = target_id
         self.last_error = None
         self._task = asyncio.create_task(self._run(target_id))
 
@@ -37,6 +56,7 @@ class TrackingScheduler:
             self._task.cancel()
             self._task = None
         self.active_target = None
+        self.active_target_id = None
 
     async def _run(self, target_name: str) -> None:
         while True:

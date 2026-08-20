@@ -354,12 +354,19 @@ class SkyTracker:
         track_minutes_future: float = 45.0,
         track_steps: int = 60,
         footprint_points: int = 72,
+        extra_satellites: list[dict] | None = None,
     ) -> list[dict]:
         """Ground track (lat/lon subpoint over time) and horizon footprint
         for every enabled satellite, for the dashboard's world-map widget.
         Unlike everything else in this file, this is about where the
         satellite is over the Earth's surface, not what it looks like from
         the observer -- so it doesn't depend on observer location at all.
+
+        extra_satellites (each {"norad": int, "name": str}) are included
+        alongside the enabled set, deduplicated by norad -- see
+        api/tracking.py's /groundtracks route, which uses this to keep the
+        actively-tracked satellite's track/footprint on the map even when
+        it isn't part of any enabled group.
         """
         t0 = self._timescale.now()
         offsets_min = [
@@ -369,8 +376,12 @@ class SkyTracker:
         ]
         sample_times = self._timescale.tt_jd([t0.tt + m / 1440.0 for m in offsets_min])
 
+        satellites = self._enabled_satellites()
+        seen = {sat["norad"] for sat in satellites}
+        satellites += [sat for sat in (extra_satellites or []) if sat["norad"] not in seen]
+
         results = []
-        for sat in self._enabled_satellites():
+        for sat in satellites:
             satellite = self._tle_catalog.get(sat["norad"])
             if satellite is None:
                 continue

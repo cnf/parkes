@@ -6,7 +6,7 @@ from parkes.preferences import preferences
 from parkes.process import ManagedProcess
 from parkes.sdr.app_profiles import load_profiles, resolve_command
 from parkes.sdr.arbiter import SdrArbiter
-from parkes.tracking.antennas import active_bands, downlink_band
+from parkes.tracking.antennas import active_antenna, downlink_receivable
 from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
 from parkes.tracking.tracked_objects import load_tracked_objects
@@ -126,16 +126,16 @@ class PassOrchestrator:
         for what "synthesized" means. `priority` is the owning tracked
         object's position in tracked_objects.json.
 
-        A downlink whose band the active antenna can't receive (see
-        tracking/antennas.active_bands) is skipped here too, same as a
-        disabled one -- there's no point winning a pass and running
+        A downlink the active antenna can't receive (see
+        tracking/antennas.downlink_receivable) is skipped here too, same
+        as a disabled one -- there's no point winning a pass and running
         nothing, when a lower-priority but actually-receivable satellite
         could have used the dish instead. If a satellite's every downlink
         gets filtered out this way, it simply never becomes a candidate
         this cycle.
         """
         min_elevation = preferences.get("orchestrator_min_elevation")
-        bands = active_bands()
+        antenna = active_antenna()
         candidates: list[_Candidate] = []
         for priority, obj in enumerate(load_tracked_objects()):
             if not obj.get("enabled", True):
@@ -144,7 +144,7 @@ class PassOrchestrator:
             for downlink in obj.get("downlinks", []):
                 if not downlink.get("enabled", True):
                     continue
-                if bands is not None and downlink_band(downlink) not in bands:
+                if antenna is not None and not downlink_receivable(downlink, antenna):
                     continue
                 try:
                     pass_info = self._sky.next_pass(target_id, min_elevation=min_elevation)
@@ -209,7 +209,19 @@ class PassOrchestrator:
         self.current_continuous = bool(pass_info.get("unbounded"))
         self.status = f"tracking {target_id}" + (" (continuous)" if self.current_continuous else "")
         self.current_target = target_id
-        self._scheduler.start(target_id)
+        try:
+            self._scheduler.start(target_id, require_enabled=False)
+        except KeyError:
+            # Shouldn't happen now that this doesn't require group
+            # membership (see TrackingScheduler.start) -- but a satellite
+            # that's dropped out of the TLE catalog entirely (a refresh
+            # racing with this pass) shouldn't take the whole orchestrator
+            # loop down either.
+            logger.warning("orchestrator: %r no longer resolves, skipping this pass", target_id)
+            self.current_target = None
+            self.current_continuous = False
+            self.status = "idle"
+            return
 
         profile_name = downlink.get("app")
         profile = load_profiles().get(profile_name) if profile_name else None

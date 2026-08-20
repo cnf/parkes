@@ -4,12 +4,22 @@ from pathlib import Path
 from parkes.config import settings
 from parkes.preferences import preferences
 
-# A physical receive chain -- name + which general bands (VHF, L-band,
-# Ku-band, ... -- see web/static/bands.js's RANGES) it can actually
-# receive. Only one is ever connected at a time (no multi-head support
-# yet); the "active_antenna_id" preference says which. See active_bands()
-# and PassOrchestrator._candidate_passes() for how that filters what the
-# Pass Orchestrator will even consider tracking.
+# A physical receive chain. Only one is ever connected at a time (no
+# multi-head support yet); the "active_antenna_id" preference says which.
+# See active_antenna()/downlink_receivable() and
+# PassOrchestrator._candidate_passes() for how that filters what the Pass
+# Orchestrator will even consider tracking.
+#
+# coverage_mode picks how an antenna's reach is expressed:
+#   "band"  -- which general bands (VHF, L-band, Ku-band, ... -- see
+#              web/static/bands.js's RANGES) it can receive. Good enough
+#              for something wideband like an LNB, which genuinely covers
+#              most of a whole band.
+#   "range" -- an explicit [freq_min_mhz, freq_max_mhz]. For anything
+#              narrowband/resonant (e.g. a 868MHz ISM antenna) where the
+#              coarse band boundaries would be badly wrong -- checking
+#              "UHF" would also claim it can receive a 437MHz downlink,
+#              which its SWR curve doesn't actually support.
 #
 # Each entry's dict key is its stable id -- same convention as
 # static_positions.py/app_profiles.py.
@@ -43,19 +53,14 @@ def delete_antenna(antenna_id: str) -> None:
         save_antennas(antennas)
 
 
-def active_bands() -> set[str] | None:
-    """The currently-connected antenna's receivable bands, or None if
-    there's nothing to filter by -- either no antenna is selected, or the
-    selected one has no bands assigned. The latter fails open rather than
-    silently blocking every satellite because of an unconfigured entry.
-    """
+def active_antenna() -> dict | None:
+    """The currently-connected antenna's config, or None if there's
+    nothing to filter by -- no antenna is selected, or the selected id no
+    longer exists (e.g. it was deleted)."""
     antenna_id = preferences.get("active_antenna_id")
     if not antenna_id:
         return None
-    antenna = load_antennas().get(antenna_id)
-    if antenna is None or not antenna.get("bands"):
-        return None
-    return set(antenna["bands"])
+    return load_antennas().get(antenna_id)
 
 
 # General band boundaries (MHz) -- a deliberately small, untagged subset of
@@ -94,3 +99,25 @@ def downlink_band(downlink: dict) -> str | None:
     suddenly treat every already-configured downlink as unreachable until
     each one happened to get resaved through the editor."""
     return downlink.get("band") or _band_for_frequency(downlink.get("frequency"))
+
+
+def downlink_receivable(downlink: dict, antenna: dict) -> bool:
+    """Whether `antenna` can receive `downlink`, per its coverage_mode.
+    An unconfigured antenna -- "band" mode with nothing checked, or
+    "range" mode missing either bound -- fails open (True) rather than
+    treating every downlink as unreachable just because the entry hasn't
+    been filled in yet; same reasoning as active_antenna() not filtering
+    at all when nothing's selected. A missing coverage_mode (antennas
+    saved before "range" existed) defaults to "band", same as the API
+    model's default.
+    """
+    if antenna.get("coverage_mode") == "range":
+        low, high = antenna.get("freq_min_mhz"), antenna.get("freq_max_mhz")
+        frequency = downlink.get("frequency")
+        if low is None or high is None or not frequency:
+            return True
+        return low <= frequency / 1e6 <= high
+    bands = antenna.get("bands")
+    if not bands:
+        return True
+    return downlink_band(downlink) in bands

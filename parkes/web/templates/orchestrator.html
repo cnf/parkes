@@ -49,6 +49,16 @@
       .downlink-tooltip-row.is-active { color: var(--text); font-weight: 600; }
       .downlink-tooltip-row .freq-badge { min-width: 3.2rem; text-align: center; }
 
+      .clickable-row { cursor: pointer; }
+      .clickable-row:hover { background: var(--bg); }
+      .downlink-detail-row td { padding: 0; border-top: none; }
+      .downlink-detail-panel {
+        background: var(--bg); border-radius: 8px; padding: 0.7rem 0.9rem; margin: -0.1rem 0 0.6rem;
+        font-size: 0.85rem;
+      }
+      .downlink-detail-panel a { color: var(--accent2); }
+      .downlink-detail-basic { margin-bottom: 0.5rem; color: var(--text-muted); }
+
       .profile-mode-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
       .profile-mode-row label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; font-weight: normal; }
       .profile-mode-row input[type="radio"] { width: auto; accent-color: var(--accent); }
@@ -89,6 +99,9 @@
       .antenna-bands-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
       .antenna-band-checkbox { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; font-weight: normal; border: 1px solid var(--border); border-radius: 8px; padding: 0.3rem 0.6rem; cursor: pointer; }
       .antenna-band-checkbox input { width: auto; accent-color: var(--accent); }
+      .antenna-range-row { display: flex; gap: 0.6rem; margin-bottom: 1rem; }
+      .antenna-range-field { width: 8rem; }
+      .antenna-range-field input { width: 100%; }
       .table-scroll { overflow-x: auto; }
       table td { vertical-align: middle; }
       table td.actions-col { white-space: nowrap; text-align: right; }
@@ -134,7 +147,7 @@
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Name</th><th>Bands</th><th></th></tr>
+              <tr><th>Name</th><th>Coverage</th><th></th></tr>
             </thead>
             <tbody id="antennas-table-body"></tbody>
           </table>

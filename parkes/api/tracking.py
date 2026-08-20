@@ -78,12 +78,57 @@ async def timezone_endpoint(lat: float, lon: float):
 
 @router.get("/targets")
 def list_targets(request: Request):
-    return _sky(request).list_targets()
+    """SkyTracker.list_targets() is a group-enabled allowlist -- fine for
+    "what can I start tracking," but the satellite actually being tracked
+    right now (manually, or via the Pass Orchestrator, which shares
+    TrackingScheduler) can be outside that allowlist, e.g. if its group
+    got disabled mid-track. Rather than have it silently vanish from the
+    dashboard while still genuinely tracking, append it here if it's
+    missing -- compute_azel()/next_pass() work off the full TLE catalog
+    regardless of group membership, so this is just as valid a row.
+    """
+    sky = _sky(request)
+    targets = sky.list_targets()
+    active_id = _scheduler(request).active_target_id
+    if active_id and not any(t["id"] == active_id for t in targets):
+        try:
+            az, el = sky.compute_azel(active_id)
+        except KeyError:
+            pass
+        else:
+            targets.append(
+                {
+                    "id": active_id,
+                    "name": sky.display_name(active_id),
+                    "kind": "satellite" if active_id.startswith("sat:") else "fixed",
+                    "az": az,
+                    "el": el,
+                    "visible": bool(el > 0),
+                }
+            )
+    return targets
 
 
 @router.get("/passes")
 def upcoming_passes(request: Request, min_elevation: float = 0.0):
-    return _sky(request).upcoming_passes(min_elevation=min_elevation)
+    """Same group-independence concern as /targets above -- upcoming_passes()
+    only covers enabled-group satellites, so the actively-tracked one (if
+    outside that allowlist) otherwise has no "Next pass"/AOS data on the
+    dashboard, and pass-plot.js's pickTarget() can't find it at all (it
+    requires a matching entry here, see its comment).
+    """
+    sky = _sky(request)
+    passes = sky.upcoming_passes(min_elevation=min_elevation)
+    active_id = _scheduler(request).active_target_id
+    if active_id and active_id.startswith("sat:") and not any(p["id"] == active_id for p in passes):
+        try:
+            result = sky.next_pass(active_id, min_elevation=min_elevation)
+        except KeyError:
+            result = None
+        if result is not None:
+            passes.append({"id": active_id, "name": sky.display_name(active_id), **result})
+            passes.sort(key=lambda p: p["aos"])
+    return passes
 
 
 @router.get("/passes/{target_id}/track")
@@ -101,13 +146,27 @@ def pass_track(target_id: str, request: Request, min_elevation: float = 0.0, ste
 
 @router.get("/groundtracks")
 def ground_tracks(request: Request):
-    return _sky(request).ground_tracks()
+    """Same group-independence concern as /targets and /passes -- without
+    this, the actively-tracked satellite's track/footprint/subpoint just
+    never appear on the world-map widget if it's outside the enabled-group
+    allowlist ground_tracks() otherwise uses.
+    """
+    sky = _sky(request)
+    active_id = _scheduler(request).active_target_id
+    extra = []
+    if active_id and active_id.startswith("sat:"):
+        extra = [{"norad": int(active_id[4:]), "name": sky.display_name(active_id)}]
+    return sky.ground_tracks(extra_satellites=extra)
 
 
 @router.get("/status")
 def status(request: Request):
     scheduler = _scheduler(request)
-    return {"active_target": scheduler.active_target, "last_error": scheduler.last_error}
+    return {
+        "active_target": scheduler.active_target,
+        "active_target_id": scheduler.active_target_id,
+        "last_error": scheduler.last_error,
+    }
 
 
 @router.post("/start")

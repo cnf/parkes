@@ -12,9 +12,9 @@ from parkes.sdr.command_modules import list_command_modules
 from parkes.sdr.satdump_pipelines import list_all_pipelines, list_live_pipelines
 from parkes.standalone_apps import StandaloneAppRunner
 from parkes.tracking.antennas import (
-    active_bands,
+    active_antenna,
     delete_antenna,
-    downlink_band,
+    downlink_receivable,
     load_antennas,
     put_antenna,
 )
@@ -59,11 +59,9 @@ class DownlinkRequest(BaseModel):
     bias: bool = False
     # General band (e.g. "VHF"/"Ku-band" -- see web/static/bands.js),
     # computed client-side from frequency and refreshed whenever it
-    # changes. Used to filter candidates against the active antenna's
-    # coverage (see tracking/antennas.active_bands and
-    # PassOrchestrator._candidate_passes) -- unset/unrecognized means the
-    # downlink is treated as unreachable whenever an antenna filter is
-    # active, since there's nothing to confirm it against.
+    # changes. Only consulted for a "band"-mode active antenna (see
+    # tracking/antennas.downlink_receivable) -- a "range"-mode one
+    # compares frequency directly instead.
     band: str | None = None
     enabled: bool = True
 
@@ -117,11 +115,16 @@ class UpsertStaticPositionRequest(BaseModel):
 
 class UpsertAntennaRequest(BaseModel):
     name: str
-    # General band names (see web/static/bands.js) this antenna/LNB can
-    # receive. Empty means unconfigured -- see antennas.active_bands(),
-    # which fails open (no filtering) rather than treating that as "covers
-    # nothing".
+    # "band": bands (general band names, see web/static/bands.js) is
+    # authoritative. "range": freq_min_mhz/freq_max_mhz is, for anything
+    # narrowband/resonant where the coarse band boundaries would be wrong
+    # -- see tracking/antennas.downlink_receivable(). Either an empty
+    # bands list or an incomplete range means unconfigured, which fails
+    # open (no filtering) rather than treating that as "covers nothing".
+    coverage_mode: Literal["band", "range"] = "band"
     bands: list[str] = []
+    freq_min_mhz: float | None = None
+    freq_max_mhz: float | None = None
 
 
 def _orchestrator(request: Request) -> PassOrchestrator:
@@ -381,11 +384,11 @@ def _active_downlink(position: dict) -> dict | None:
     and consistent with Tracked Satellites, and there's no more point
     "Go"-ing to a position and launching an app whose downlink the current
     antenna can't receive than there is winning a pass for one."""
-    bands = active_bands()
+    antenna = active_antenna()
     for d in _effective_downlinks(position):
         if not d.get("enabled", True):
             continue
-        if bands is not None and downlink_band(d) not in bands:
+        if antenna is not None and not downlink_receivable(d, antenna):
             continue
         return d
     return None

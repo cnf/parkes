@@ -1038,7 +1038,14 @@
 
   async function loadAntennas() {
     const data = await apiFetch("/api/orchestrator/antennas");
-    antennas = Object.entries(data).map(([id, a]) => ({ id, name: a.name || id, bands: a.bands || [] }));
+    antennas = Object.entries(data).map(([id, a]) => ({
+      id,
+      name: a.name || id,
+      coverageMode: a.coverage_mode === "range" ? "range" : "band",
+      bands: a.bands || [],
+      freqMinMhz: a.freq_min_mhz ?? null,
+      freqMaxMhz: a.freq_max_mhz ?? null,
+    }));
   }
 
   async function loadActiveAntenna() {
@@ -1061,6 +1068,18 @@
     activeAntennaSelect.value = activeAntennaId && antennas.some((a) => a.id === activeAntennaId) ? activeAntennaId : "";
   }
 
+  // Tracked Satellites/Static Positions' downlink summaries depend on the
+  // active antenna (see effectiveDownlink()/downlinkReceivable()), but
+  // their tables are only rebuilt when something explicitly re-renders
+  // them -- without this, switching antennas (or editing/deleting the one
+  // currently active) looks like it did nothing until the next unrelated
+  // action happens to rebuild those rows. Skips a list mid-edit rather
+  // than yanking the editor out from under an in-progress change.
+  function refreshDownlinkFilteredViews() {
+    if (trackedEditIndex === null) renderTrackedList();
+    if (positionsEditIndex === null) renderPositionsList();
+  }
+
   activeAntennaSelect.addEventListener("change", async () => {
     const value = activeAntennaSelect.value || null;
     try {
@@ -1071,6 +1090,7 @@
       });
       activeAntennaId = value;
       flashStatus(antennasStatus, "active antenna updated", false);
+      refreshDownlinkFilteredViews();
     } catch (err) {
       flashStatus(antennasStatus, `error: ${err.message}`, true);
       renderActiveAntennaSelect();
@@ -1086,10 +1106,17 @@
 
   async function saveAntenna(antenna) {
     assignAntennaId(antenna);
+    const payload = {
+      name: antenna.name.trim(),
+      coverage_mode: antenna.coverageMode,
+      ...(antenna.coverageMode === "range"
+        ? { bands: [], freq_min_mhz: antenna.freqMinMhz, freq_max_mhz: antenna.freqMaxMhz }
+        : { bands: antenna.bands, freq_min_mhz: null, freq_max_mhz: null }),
+    };
     await apiFetch(`/api/orchestrator/antennas/${encodeURIComponent(antenna.id)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: antenna.name.trim(), bands: antenna.bands }),
+      body: JSON.stringify(payload),
     });
     flashStatus(antennasStatus, "saved", false);
   }
@@ -1100,6 +1127,12 @@
 
   function validateAntenna(antenna) {
     if (!antenna.name.trim()) return "every antenna needs a name";
+    if (antenna.coverageMode === "range") {
+      if (!Number.isFinite(antenna.freqMinMhz) || !Number.isFinite(antenna.freqMaxMhz)) {
+        return "frequency range needs both a min and max (MHz)";
+      }
+      if (antenna.freqMinMhz >= antenna.freqMaxMhz) return "min frequency must be less than max";
+    }
     return null;
   }
 
@@ -1123,7 +1156,14 @@
       nameTd.textContent = antenna.name;
 
       const bandsTd = document.createElement("td");
-      if (antenna.bands.length === 0) {
+      if (antenna.coverageMode === "range") {
+        if (Number.isFinite(antenna.freqMinMhz) && Number.isFinite(antenna.freqMaxMhz)) {
+          bandsTd.textContent = `${antenna.freqMinMhz}–${antenna.freqMaxMhz} MHz`;
+        } else {
+          bandsTd.className = "hint";
+          bandsTd.textContent = "no range set";
+        }
+      } else if (antenna.bands.length === 0) {
         bandsTd.className = "hint";
         bandsTd.textContent = "no bands set";
       } else {
@@ -1194,29 +1234,85 @@
     });
     antennasEditView.appendChild(nameInput);
 
-    const bandsLabel = document.createElement("div");
-    bandsLabel.className = "field-label";
-    bandsLabel.textContent = "Receivable bands";
-    antennasEditView.appendChild(bandsLabel);
+    const modeLabel = document.createElement("div");
+    modeLabel.className = "field-label";
+    modeLabel.textContent = "Coverage";
+    antennasEditView.appendChild(modeLabel);
 
-    const bandsRow = document.createElement("div");
-    bandsRow.className = "antenna-bands-row";
-    for (const b of window.ParkesBands.generalBands()) {
-      const label = document.createElement("label");
-      label.className = "antenna-band-checkbox";
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = antenna.bands.includes(b.band);
-      cb.addEventListener("change", () => {
-        antenna.bands = cb.checked ? [...antenna.bands, b.band] : antenna.bands.filter((x) => x !== b.band);
+    const modeSeg = document.createElement("div");
+    modeSeg.className = "seg-row";
+    for (const [value, text] of [["band", "General band"], ["range", "Frequency range"]]) {
+      const modeBtn = document.createElement("button");
+      modeBtn.type = "button";
+      modeBtn.className = "btn-sm" + (antenna.coverageMode === value ? " active" : "");
+      modeBtn.textContent = text;
+      modeBtn.addEventListener("click", () => {
+        antenna.coverageMode = value;
+        renderAntennaEdit();
       });
-      const badge = document.createElement("span");
-      badge.className = `freq-badge c-${b.color}`;
-      badge.textContent = b.band;
-      label.append(cb, badge);
-      bandsRow.appendChild(label);
+      modeSeg.appendChild(modeBtn);
     }
-    antennasEditView.appendChild(bandsRow);
+    antennasEditView.appendChild(modeSeg);
+
+    if (antenna.coverageMode === "range") {
+      const hint = document.createElement("p");
+      hint.className = "hint";
+      hint.textContent =
+        "For narrowband/resonant antennas where the coarse bands below would be wrong -- e.g. a " +
+        "868MHz ISM antenna checking off \"UHF\" would also claim it can receive a 437MHz downlink.";
+      antennasEditView.appendChild(hint);
+
+      const rangeRow = document.createElement("div");
+      rangeRow.className = "antenna-range-row";
+
+      const minInput = document.createElement("input");
+      minInput.type = "number";
+      minInput.step = "any";
+      minInput.placeholder = "min";
+      minInput.value = antenna.freqMinMhz ?? "";
+      minInput.addEventListener("input", () => {
+        const parsed = Number(minInput.value);
+        antenna.freqMinMhz = minInput.value === "" || !Number.isFinite(parsed) ? null : parsed;
+      });
+      rangeRow.appendChild(labeledField("Min (MHz)", minInput, "antenna-range-field"));
+
+      const maxInput = document.createElement("input");
+      maxInput.type = "number";
+      maxInput.step = "any";
+      maxInput.placeholder = "max";
+      maxInput.value = antenna.freqMaxMhz ?? "";
+      maxInput.addEventListener("input", () => {
+        const parsed = Number(maxInput.value);
+        antenna.freqMaxMhz = maxInput.value === "" || !Number.isFinite(parsed) ? null : parsed;
+      });
+      rangeRow.appendChild(labeledField("Max (MHz)", maxInput, "antenna-range-field"));
+
+      antennasEditView.appendChild(rangeRow);
+    } else {
+      const bandsLabel = document.createElement("div");
+      bandsLabel.className = "field-label";
+      bandsLabel.textContent = "Receivable bands";
+      antennasEditView.appendChild(bandsLabel);
+
+      const bandsRow = document.createElement("div");
+      bandsRow.className = "antenna-bands-row";
+      for (const b of window.ParkesBands.generalBands()) {
+        const label = document.createElement("label");
+        label.className = "antenna-band-checkbox";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = antenna.bands.includes(b.band);
+        cb.addEventListener("change", () => {
+          antenna.bands = cb.checked ? [...antenna.bands, b.band] : antenna.bands.filter((x) => x !== b.band);
+        });
+        const badge = document.createElement("span");
+        badge.className = `freq-badge c-${b.color}`;
+        badge.textContent = b.band;
+        label.append(cb, badge);
+        bandsRow.appendChild(label);
+      }
+      antennasEditView.appendChild(bandsRow);
+    }
 
     const actionsRow = document.createElement("div");
     actionsRow.className = "row";
@@ -1238,6 +1334,9 @@
         return;
       }
       exitAntennaEdit(true);
+      // Editing the currently-active antenna's own coverage should
+      // refresh what it filters, same as switching which one's active.
+      refreshDownlinkFilteredViews();
     });
     actionsRow.appendChild(saveBtn);
     antennasEditView.appendChild(actionsRow);
@@ -1263,13 +1362,14 @@
       antennasEditIndex = null;
       antennasEditSnapshot = null;
       renderAntennasList();
+      refreshDownlinkFilteredViews();
     });
     dangerRow.appendChild(deleteBtn);
     antennasEditView.appendChild(dangerRow);
   }
 
   addAntennaBtn.addEventListener("click", () => {
-    antennas.push({ id: null, name: "", bands: [] });
+    antennas.push({ id: null, name: "", coverageMode: "band", bands: [], freqMinMhz: null, freqMaxMhz: null });
     enterAntennaEdit(antennas.length - 1);
   });
 
@@ -1287,6 +1387,9 @@
   let trackedObjects = [];
   let trackedEditIndex = null;
   let trackedEditSnapshot = null;
+  // Which row (by norad) has its downlink-detail row expanded -- at most
+  // one at a time, see renderTrackedList()'s row click handler.
+  let expandedTrackedNorad = null;
 
   function profileName(id) {
     const profile = profiles.find((p) => p.id === id);
@@ -1301,28 +1404,41 @@
     return downlink.band || bandForDownlink(downlink.frequency);
   }
 
-  // Mirrors tracking/antennas.py's active_bands() -- null means no
-  // filtering, whether because nothing's selected or the selected antenna
-  // has no bands assigned.
-  function currentActiveBands() {
+  // Mirrors tracking/antennas.py's active_antenna() -- the raw selected
+  // antenna, or null if nothing's selected (or its id no longer exists).
+  function currentActiveAntenna() {
     if (!activeAntennaId) return null;
-    const antenna = antennas.find((a) => a.id === activeAntennaId);
-    if (!antenna || antenna.bands.length === 0) return null;
-    return new Set(antenna.bands);
+    return antennas.find((a) => a.id === activeAntennaId) || null;
+  }
+
+  // Mirrors tracking/antennas.py's downlink_receivable() -- "range" mode
+  // compares the downlink's actual frequency against the antenna's
+  // min/max MHz directly; "band" mode (or an antenna saved before
+  // coverage_mode existed) checks its general band instead. An
+  // unconfigured antenna (nothing checked, or an incomplete range) fails
+  // open, same as no antenna being selected at all.
+  function downlinkReceivable(downlink, antenna) {
+    if (antenna.coverageMode === "range") {
+      if (!Number.isFinite(antenna.freqMinMhz) || !Number.isFinite(antenna.freqMaxMhz)) return true;
+      const mhz = Number(downlink.frequency) / 1e6;
+      return Number.isFinite(mhz) && mhz >= antenna.freqMinMhz && mhz <= antenna.freqMaxMhz;
+    }
+    if (!antenna.bands || antenna.bands.length === 0) return true;
+    return antenna.bands.includes(effectiveBand(downlink));
   }
 
   // The one downlink PassOrchestrator._candidate_passes() would actually
   // pick for a pass right now: the first enabled one, narrowed to the
-  // first whose band the active antenna can receive if one's selected.
-  // null when every enabled downlink is filtered out by the current
-  // antenna (not the same as "no enabled downlinks" -- callers that care
-  // about the distinction check obj.downlinks themselves).
+  // first the active antenna can receive if one's selected. null when
+  // every enabled downlink is filtered out by the current antenna (not
+  // the same as "no enabled downlinks" -- callers that care about the
+  // distinction check obj.downlinks themselves).
   function effectiveDownlink(downlinks) {
     const enabled = downlinks.filter((d) => d.enabled !== false);
     if (enabled.length === 0) return null;
-    const bands = currentActiveBands();
-    if (!bands) return enabled[0];
-    return enabled.find((d) => bands.has(effectiveBand(d))) || null;
+    const antenna = currentActiveAntenna();
+    if (!antenna) return enabled[0];
+    return enabled.find((d) => downlinkReceivable(d, antenna)) || null;
   }
 
   function describeDownlink(d) {
@@ -1331,6 +1447,46 @@
     const label = d.mode ? `${freq}${upFreq} (${d.mode})` : `${freq}${upFreq}`;
     const withApp = d.app ? `${label} → ${profileName(d.app)}` : label;
     return d.enabled === false ? `${withApp} (disabled)` : withApp;
+  }
+
+  // Shared expand/collapse detail row for Tracked Satellites and Static
+  // Positions -- clicking a row (see wiring in renderTrackedList()/
+  // renderPositionsList()) shows this pinned below it instead of only
+  // being reachable via the hover popover. Same per-downlink content/
+  // active-highlighting as that popover (reuses its CSS classes), plus
+  // whatever basic-info HTML the caller wants above the list.
+  function buildDownlinkDetailRow(colspan, downlinks, basicInfoHtml) {
+    const tr = document.createElement("tr");
+    tr.className = "downlink-detail-row";
+    const td = document.createElement("td");
+    td.colSpan = colspan;
+    const panel = document.createElement("div");
+    panel.className = "downlink-detail-panel";
+    if (basicInfoHtml) panel.insertAdjacentHTML("beforeend", basicInfoHtml);
+    if (downlinks.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.textContent = "no downlinks configured";
+      panel.appendChild(empty);
+    } else {
+      const active = effectiveDownlink(downlinks);
+      for (const d of downlinks) {
+        const match = window.ParkesBands.detect(Number(d.frequency));
+        const row = document.createElement("div");
+        row.className = "downlink-tooltip-row" + (d === active ? " is-active" : "");
+        if (match) {
+          const badge = document.createElement("span");
+          badge.className = `freq-badge c-${match.color}`;
+          badge.textContent = match.band;
+          row.appendChild(badge);
+        }
+        row.appendChild(document.createTextNode(describeDownlink(d)));
+        panel.appendChild(row);
+      }
+    }
+    td.appendChild(panel);
+    tr.appendChild(td);
+    return tr;
   }
 
   // Hz to hang a band badge/tooltip off of, when the summary boils down to
@@ -1580,7 +1736,23 @@
       editTd.appendChild(editBtn);
 
       row.append(cbTd, nameTd, downlinkTd, totalTd, priorityTd, editTd);
+
+      // Click anywhere on the row that isn't already an interactive
+      // control (checkbox/priority/edit) to expand its downlink detail
+      // panel below it -- collapses whichever other row was expanded,
+      // since expandedTrackedNorad only ever holds one at a time.
+      row.className = "clickable-row";
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("button, input, a")) return;
+        expandedTrackedNorad = expandedTrackedNorad === obj.norad ? null : obj.norad;
+        renderTrackedList();
+      });
       trackedTableBody.appendChild(row);
+
+      if (expandedTrackedNorad === obj.norad) {
+        const satnogsLink = `<a href="https://db.satnogs.org/satellite/${obj.norad}/" target="_blank" rel="noopener">View on SatNOGS DB &#8599;</a>`;
+        trackedTableBody.appendChild(buildDownlinkDetailRow(6, obj.downlinks, satnogsLink));
+      }
     });
   }
 
@@ -2220,6 +2392,9 @@
   let staticPositions = [];
   let positionsEditIndex = null;
   let positionsEditSnapshot = null;
+  // Which row (by id) has its downlink-detail row expanded -- at most one
+  // at a time, see renderPositionsList()'s row click handler.
+  let expandedPositionId = null;
 
   async function loadStaticPositions() {
     const data = await apiFetch("/api/orchestrator/static_positions");
@@ -2403,8 +2578,27 @@
       editTd.appendChild(editBtn);
 
       row.append(nameTd, azElTd, downlinkTd, totalTd, actionsTd, editTd);
+
+      // Same row-click-to-expand convention as Tracked Satellites -- see
+      // its comment in renderTrackedList().
+      row.className = "clickable-row";
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("button, input, a")) return;
+        expandedPositionId = expandedPositionId === position.id ? null : position.id;
+        renderPositionsList();
+      });
       positionsTableBody.appendChild(row);
       applyPositionStatus(row, active && active.app);
+
+      if (expandedPositionId === position.id) {
+        const basicInfo =
+          position.positionMode === "latlon"
+            ? `<div class="downlink-detail-basic">Lat/Lon: ${position.lat != null ? position.lat.toFixed(4) : "?"}, ${
+                position.lon != null ? position.lon.toFixed(4) : "?"
+              } &middot; Alt: ${position.altM ?? 0}m</div>`
+            : "";
+        positionsTableBody.appendChild(buildDownlinkDetailRow(6, position.downlinks, basicInfo));
+      }
     });
   }
 
