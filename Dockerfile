@@ -34,7 +34,6 @@ RUN mkdir -p data
 
 RUN useradd --home-dir /app --uid 4213 parkes \
     && chown -R parkes:parkes /app
-VOLUME /app/data
 
 # Serial (rotator) and USB (HackRF/RTL-SDR) device access is granted at
 # `docker run` time, not baked into the image -- see docs/deploy.md:
