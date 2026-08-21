@@ -1,0 +1,36 @@
+services:
+  parkes:
+    build: .
+    image: parkes
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      # SoapyRemote sharing (soapy_remote_bind_port) -- only needed if that
+      # feature is turned on. mDNS-based discovery of it from a laptop
+      # relies on the same L2 segment, which a bridge network doesn't
+      # forward; use `network_mode: host` below instead if you need that.
+      - "55132:55132"
+      # rotctld, only reachable if its bind address is widened past
+      # localhost on the Settings page (e.g. so gpredict on a laptop can
+      # drive the dish too).
+      - "4533:4533"
+    volumes:
+      # Everything stateful lives here (preferences, TLE/skyfield caches,
+      # satdump output) -- see parkes/config.py. Must be writable by uid
+      # 4213 (the "parkes" user baked into the Dockerfile) or the container
+      # can't start: `sudo chown -R 4213:4213 ./data`.
+      #- ./data:/app/data
+      # or use a named volume
+      - parkes-data:/app/data
+    # Rotator serial + SDR USB access -- uncomment and point at your actual
+    # devices (an empty `devices:` list is invalid, so the key itself is
+    # commented out too). See docs/deploy.md for why by-id paths are
+    # preferred over /dev/ttyUSB0.
+    # devices:
+    #   - /dev/serial/by-id/<rotator-id>:/dev/rotator
+    #   - /dev/bus/usb:/dev/bus/usb
+    # env_file: parkes.env  # PARKES_* fresh-deploy defaults, see parkes/config.py
+    # network_mode: host  # alternative to the ports: list above, needed for SoapyRemote mDNS discovery on the LAN
+
+volumes:
+  parkes-data:
