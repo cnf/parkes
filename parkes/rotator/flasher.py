@@ -25,6 +25,19 @@ class FirmwareFlasher(ManagedProcess):
     confirmed against a real esptool on the user's machine). Portability
     across whatever esptool version ends up installed matters more than
     silencing a deprecation warning on one specific version.
+
+    --no-stub is deliberate too: Debian's packaged esptool (4.7.0) ships
+    without the ESP32-S3 stub flasher's JSON data file, crashing with
+    FileNotFoundError before it can flash anything -- confirmed against
+    the real board. --no-stub skips uploading/using that stub entirely
+    and talks to the ROM bootloader directly, sidestepping the whole
+    class of "stub missing/incompatible for this chip" packaging issues.
+    It's also a reasonable permanent default for this board specifically,
+    not just a workaround for one broken package: the ESP32-S3's native
+    USB Serial/JTAG peripheral has a documented erratum where replies can
+    arrive late (see project notes on rotctld's EL-query timeouts), and
+    the stub protocol's tighter timing assumptions are more exposed to
+    that than the simpler ROM-bootloader protocol --no-stub uses.
     """
 
     def __init__(self):
@@ -47,6 +60,7 @@ class FirmwareFlasher(ManagedProcess):
             "--port", device,
             "--before", "default_reset",
             "--after", "hard_reset",
+            "--no-stub",
             "write_flash",
             "--flash_mode", settings.esptool_flash_mode,
             "--flash_freq", settings.esptool_flash_freq,
