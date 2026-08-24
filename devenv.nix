@@ -12,6 +12,9 @@
     socat
     ruff
     gh
+    # Flashes new firmware onto the EasyCommII board's app partition from
+    # the webui -- see parkes/rotator/flasher.py.
+    esptool
   ];
 
   languages.python = {
@@ -23,6 +26,8 @@
       jinja2
       pydantic-settings
       skyfield
+      # FastAPI's file/form-upload parsing dependency (Firmware upload).
+      python-multipart
     ]);
   };
 

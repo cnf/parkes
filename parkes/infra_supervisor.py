@@ -160,6 +160,21 @@ class InfraSupervisor:
         for daemon in self.daemons.values():
             await daemon.stop()
 
+    async def stop_daemon(self, name: str) -> None:
+        """Stops one named daemon only -- e.g. freeing rotctld's serial
+        port for a firmware flash (see api/rotator.py's /flash endpoint)
+        without also bouncing gpsd, which may be on a different device
+        entirely. No-op if that daemon isn't managed (or doesn't exist).
+        """
+        daemon = self.daemons.get(name)
+        if daemon is not None:
+            await daemon.stop()
+
+    async def start_daemon(self, name: str) -> None:
+        daemon = self.daemons.get(name)
+        if daemon is not None:
+            await daemon.start()
+
     async def reconfigure(self) -> None:
         """Re-reads preferences and restarts affected daemons -- called
         after a settings save that touches rotator/gpsd process config.

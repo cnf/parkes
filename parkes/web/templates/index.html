@@ -48,6 +48,11 @@
       #antenna-modal-options { display: flex; flex-direction: column; gap: 0.6rem; margin: 0.8rem 0 1rem; }
       #antenna-modal-options label { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; }
       #antenna-modal-options input[type="radio"] { width: auto; accent-color: var(--accent); }
+
+      .weather-grid { display: flex; flex-wrap: wrap; gap: 1.1rem 1.6rem; font-variant-numeric: tabular-nums; }
+      .weather-grid .lab { display: block; font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.15rem; }
+      .weather-grid .val { font-size: 1.05rem; font-weight: 600; }
+      .weather-grid .unit { font-size: 0.78rem; color: var(--text-muted); font-weight: 400; }
     </style>
 {% endblock %}
 
@@ -216,6 +221,23 @@
     </section>
     </div>
 
+    <div class="card" data-group-id="weather">
+    <section class="widget" id="weather-card" data-widget-id="weather" data-widget-label="Weather">
+      <div class="card-header">
+        <h2>Weather</h2>
+        <span class="status-pill" id="weather-updated"></span>
+      </div>
+      <div class="weather-grid" id="weather-grid">
+        <div><span class="lab">Cloud cover</span><span class="val"><span id="weather-cloud">--</span><span class="unit">%</span></span></div>
+        <div><span class="lab">Precipitation</span><span class="val"><span id="weather-precip">--</span><span class="unit">mm/h</span></span></div>
+        <div><span class="lab">Humidity</span><span class="val"><span id="weather-humidity">--</span><span class="unit">%</span></span></div>
+        <div><span class="lab">Wind</span><span class="val"><span id="weather-wind">--</span><span class="unit">km/h</span></span></div>
+        <div><span class="lab">Temperature</span><span class="val"><span id="weather-temp">--</span><span class="unit">&deg;C</span></span></div>
+      </div>
+      <p class="hint" id="weather-error" style="display: none; color: var(--danger); margin: 0.8rem 0 0;"></p>
+    </section>
+    </div>
+
     <div class="card" data-group-id="world-map">
     <section class="widget" id="world-map-card" data-widget-id="world-map" data-widget-label="World Map">
       <div class="world-map-wrap">
@@ -264,6 +286,7 @@
     <script src="/static/tracking.js"></script>
     <script src="/static/pass-plot.js"></script>
     <script src="/static/world-map.js"></script>
+    <script src="/static/weather.js"></script>
     <script src="/static/orchestrator-status.js"></script>
     <script src="/static/antenna-select.js"></script>
 {% endblock %}

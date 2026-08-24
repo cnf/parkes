@@ -81,6 +81,7 @@ def get_settings(request: Request):
         "infra": {
             "rotctld_bin": settings.rotctld_bin,
             "gpsd_bin": settings.gpsd_bin,
+            "esptool_bin": settings.esptool_bin,
             "satdump_output_dir": settings.satdump_output_dir,
             "tle_data_dir": settings.tle_data_dir,
             "skyfield_data_dir": settings.skyfield_data_dir,

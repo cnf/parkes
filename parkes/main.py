@@ -29,10 +29,12 @@ from parkes.api.sdr import router as sdr_router
 from parkes.api.settings import router as settings_router
 from parkes.api.status import router as status_router
 from parkes.api.tracking import router as tracking_router
+from parkes.api.weather import router as weather_router
 from parkes.config import settings
 from parkes.infra_supervisor import InfraSupervisor
 from parkes.orchestrator import PassOrchestrator
 from parkes.preferences import preferences
+from parkes.rotator.flasher import FirmwareFlasher
 from parkes.rotator.rotctld_client import RotctldClient
 from parkes.satnogs.service import SatnogsService
 from parkes.sdr.arbiter import SdrArbiter
@@ -45,6 +47,7 @@ from parkes.tracking.scheduler import TrackingScheduler
 from parkes.tracking.sky import SkyTracker
 from parkes.tracking.tle import TleCatalog
 from parkes.tracking.tle_sources import TleSourceStore
+from parkes.weather.service import WeatherService
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +98,8 @@ async def lifespan(app: FastAPI):
     app.state.standalone_apps = StandaloneAppRunner(app.state.sdr_arbiter)
     app.state.standalone_apps.start_timer()
     app.state.satnogs = SatnogsService()
+    app.state.weather = WeatherService()
+    app.state.flasher = FirmwareFlasher()
     await app.state.sdr_arbiter.ensure_idle_state()
     yield
     tle_load_task.cancel()
@@ -102,6 +107,7 @@ async def lifespan(app: FastAPI):
     await app.state.soapy_remote.stop()
     await app.state.orchestrator.stop()
     await app.state.standalone_apps.stop_timer()
+    await app.state.flasher.stop()
     await app.state.rotator.close()
     await app.state.gpsd.stop()
     await app.state.infra.stop()
@@ -115,6 +121,7 @@ app.include_router(orchestrator_router)
 app.include_router(satnogs_router)
 app.include_router(settings_router)
 app.include_router(status_router)
+app.include_router(weather_router)
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
 

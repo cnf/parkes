@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.13",
     "pydantic-settings>=2.12",
     "python-dotenv>=1.2",
+    "python-multipart>=0.0.20",
     "skyfield>=1.54",
 ]
 
@@ -31,6 +32,12 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+# FastAPI's dependency-injection defaults (File(...)/Form(...)/Query(...)/
+# Depends(...)) are meant to be called in the signature itself -- B008
+# doesn't know that without this allowlist.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.File", "fastapi.Form"]
 
 [tool.ruff.lint.per-file-ignores]
 # socket.setdefaulttimeout()/logging setup deliberately runs before the

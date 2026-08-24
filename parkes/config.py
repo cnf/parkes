@@ -16,6 +16,21 @@ class Settings(BaseSettings):
     # ever want to flip at runtime.
     rotctld_bin: str = "rotctld"
     rotctl_bin: str = "rotctl"  # the client CLI, used only to list supported models (`-l`)
+    # Flashes new firmware onto the EasyCommII board's app partition (see
+    # parkes/rotator/flasher.py) -- deploy-time bin path, same treatment as
+    # rotctld_bin/gpsd_bin above. The rest are hardware constants for this
+    # specific board (its chip, app partition offset, and flash chip
+    # settings -- from DishControll's partitions16M.csv/sdkconfig), not
+    # something a build's flasher_args.json needs to be parsed for, since
+    # Parkes only ever rewrites the one app partition. Only change these
+    # if the board itself changes (different chip, bigger flash, a moved
+    # partition table).
+    esptool_bin: str = "esptool"
+    esptool_chip: str = "esp32s3"
+    esptool_app_offset: str = "0x10000"
+    esptool_flash_mode: str = "dio"
+    esptool_flash_freq: str = "80m"
+    esptool_flash_size: str = "16MB"
     rotctld_host: str = "localhost"
     rotctld_port: int = 4533
     # What the managed daemon binds to (-T) -- a separate concern from
@@ -130,6 +145,17 @@ class Settings(BaseSettings):
     satnogs_api_token: str | None = None  # optional, raises the rate limit
     satnogs_timeout_seconds: float = 10.0
     satnogs_cache_max_age_hours: float = 24.0
+
+    # Open-Meteo (https://open-meteo.com/, free, no API key) current
+    # conditions at the observer location for the Weather widget -- cloud
+    # cover/precipitation/humidity/wind, the numbers relevant to eyeballing
+    # rain-fade/scintillation risk. Cached like SatNOGS above (see
+    # parkes/weather/), just with a much shorter TTL since actual weather
+    # changes on the order of minutes, not days.
+    weather_base_url: str = "https://api.open-meteo.com/v1/forecast"
+    weather_cache_file: str = "data/weather/cache.json"
+    weather_timeout_seconds: float = 10.0
+    weather_cache_max_age_minutes: float = 15.0
 
 
 settings = Settings()

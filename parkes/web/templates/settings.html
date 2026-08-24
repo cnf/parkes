@@ -18,6 +18,12 @@
       .source-url { font-size: 0.78rem; color: var(--text-muted); word-break: break-all; }
       .source-error { font-size: 0.78rem; color: var(--danger); margin-top: 0.2rem; }
       .hint { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1rem; }
+      .flash-log {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem;
+        background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+        padding: 0.6rem 0.7rem; height: 12rem; overflow-y: auto; white-space: pre-wrap;
+        word-break: break-all; margin: 0.8rem 0 0;
+      }
       #add-source-form { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
       #add-source-form .field-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
       #add-source-form .field-row label { flex: 1; min-width: 10rem; }
@@ -95,6 +101,29 @@
 
     <section class="card">
       <div class="card-header">
+        <h2>Firmware (ESP32)</h2>
+      </div>
+      <p class="hint">
+        Updates the EasyCommII board's app firmware over its USB serial connection. Build
+        DishControll, then select the app image (e.g. <code>Arecibo.bin</code>, from its
+        <code>build/</code> output) below -- only the app partition is rewritten, not the
+        bootloader or partition table. rotctld is stopped automatically for the duration of the
+        flash (freeing the serial port) and restarted once it finishes, whether it succeeds or
+        fails.
+      </p>
+      <form id="flash-form">
+        <div class="settings-grid">
+          <label>App firmware (.bin) <input id="flash-file" type="file" accept=".bin" required /></label>
+          <label>Serial device <input id="flash-device" type="text" placeholder="defaults to the rotator's device" /></label>
+        </div>
+        <button type="submit" id="flash-btn" class="primary" style="margin-top: 0.8rem;">Flash</button>
+        <span id="flash-form-status" style="color: var(--text-muted); font-size: 0.85rem; margin-left: 0.6rem;"></span>
+        <pre class="flash-log" id="flash-log" style="display: none;"></pre>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
         <div class="card-header-title">
           <h2>GPS (gpsd)</h2>
           <label class="managed-toggle">
@@ -160,4 +189,5 @@
 {% block scripts %}
     <script src="/static/settings.js"></script>
     <script src="/static/sources.js"></script>
+    <script src="/static/flash.js"></script>
 {% endblock %}

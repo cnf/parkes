@@ -6,10 +6,20 @@ import subprocess
 import time
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel
 
 from parkes.config import settings
+from parkes.preferences import preferences
 from parkes.rotator.rotctld_client import RotctldClient, RotctldError
 
 router = APIRouter(prefix="/api/rotator", tags=["rotator"])
@@ -165,3 +175,49 @@ async def position_stream(websocket: WebSocket):
         send_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await send_task
+
+
+async def _restart_rotctld_when_done(request: Request) -> None:
+    # Fired once per /flash call -- brings rotctld back up whether the
+    # flash succeeded or failed, so there's no user-facing "don't forget
+    # to restart" step. exited() is None if the process never actually
+    # started (shouldn't happen here, guarded against in flash_firmware).
+    exited = request.app.state.flasher.exited()
+    if exited is not None:
+        await exited
+    await request.app.state.infra.start_daemon("rotctld")
+
+
+@router.post("/flash")
+async def flash_firmware(
+    request: Request,
+    file: UploadFile = File(...),
+    device: str | None = Form(None),
+):
+    flasher = request.app.state.flasher
+    if flasher.running:
+        raise HTTPException(409, "a flash is already in progress")
+
+    app_bytes = await file.read()
+    target_device = device or preferences.get_all()["rotator_device"]
+    if not target_device:
+        raise HTTPException(400, "no serial device configured or specified")
+
+    await request.app.state.infra.stop_daemon("rotctld")
+    try:
+        await flasher.start(target_device, app_bytes)
+    except (RuntimeError, OSError) as exc:
+        await request.app.state.infra.start_daemon("rotctld")
+        raise HTTPException(400, str(exc)) from exc
+    asyncio.create_task(_restart_rotctld_when_done(request))
+    return {"status": "started"}
+
+
+@router.get("/flash/status")
+def flash_status(request: Request):
+    flasher = request.app.state.flasher
+    return {
+        "running": flasher.running,
+        "returncode": flasher.returncode,
+        "log": flasher.log_lines,
+    }
