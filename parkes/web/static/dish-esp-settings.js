@@ -8,11 +8,40 @@
   const homeAzBtn = document.getElementById("dish-esp-home-az-btn");
   const homeElBtn = document.getElementById("dish-esp-home-el-btn");
   const homeStatusEl = document.getElementById("dish-esp-home-status");
+  const azHomedDot = document.getElementById("dish-esp-az-homed-dot");
+  const azHomedStatus = document.getElementById("dish-esp-az-homed-status");
+  const elHomedDot = document.getElementById("dish-esp-el-homed-dot");
+  const elHomedStatus = document.getElementById("dish-esp-el-homed-status");
 
   function setDot(ok, onText, offText) {
     dotEl.classList.toggle("on", ok === true);
     dotEl.classList.toggle("error", ok === false);
     statusEl.textContent = ok === true ? onText : offText;
+  }
+
+  // GE's error bitfield (EasyComm III spec) -- only shown when "homed" is
+  // unknown, since that's the only case the firmware itself flags as
+  // possibly explained by one of these.
+  const ERROR_BITS = [
+    [1, "sensor error"],
+    [2, "jam"],
+    [4, "homing error"],
+  ];
+
+  function renderHomed(dotEl2, textEl2, data) {
+    dotEl2.classList.remove("on", "error");
+    if (!data.connected) {
+      textEl2.textContent = "--";
+    } else if (data.homed === true) {
+      dotEl2.classList.add("on");
+      textEl2.textContent = "homed";
+    } else if (data.homed === false) {
+      textEl2.textContent = "not homed";
+    } else {
+      dotEl2.classList.add("error");
+      const errors = ERROR_BITS.filter(([bit]) => data.error & bit).map(([, label]) => label);
+      textEl2.textContent = errors.length ? `unknown (${errors.join(", ")})` : "unknown";
+    }
   }
 
   async function postJson(path, body) {
@@ -170,6 +199,20 @@
     }
   }
 
+  async function refreshHomed() {
+    try {
+      const [azRes, elRes] = await Promise.all([
+        fetch("/api/dish/home/azimuth"),
+        fetch("/api/dish/home/elevation"),
+      ]);
+      renderHomed(azHomedDot, azHomedStatus, await azRes.json());
+      renderHomed(elHomedDot, elHomedStatus, await elRes.json());
+    } catch {
+      // leave whatever was last shown -- a transient fetch error here
+      // isn't worth blanking a status the user might still find useful
+    }
+  }
+
   async function refresh() {
     try {
       const [configRes, versionRes] = await Promise.all([
@@ -182,6 +225,7 @@
     } catch {
       setDot(false, "", "unreachable");
     }
+    await refreshHomed();
   }
 
   function wireHomeButton(btn, path) {
@@ -191,6 +235,7 @@
         await postJson(path, {});
         homeStatusEl.textContent = "sent";
         setTimeout(() => { homeStatusEl.textContent = ""; }, 2000);
+        await refreshHomed();
       } catch (err) {
         homeStatusEl.textContent = `error: ${err.message}`;
       }

@@ -56,8 +56,8 @@ async def get_version(request: Request):
 
 @router.post("/home/azimuth")
 async def home_azimuth(request: Request):
-    # True only means the command was sent -- the firmware doesn't report
-    # homing status yet (see dish_esp/client.py).
+    # True only means the command (HANOW) was sent, not that homing
+    # completed -- see GET below for the standing homed/not-homed state.
     if not await request.app.state.dish_esp.home_azimuth():
         raise HTTPException(502, "ESP unreachable")
     return {"status": "sent"}
@@ -68,3 +68,19 @@ async def home_elevation(request: Request):
     if not await request.app.state.dish_esp.home_elevation():
         raise HTTPException(502, "ESP unreachable")
     return {"status": "sent"}
+
+
+@router.get("/home/azimuth")
+async def get_homed_azimuth(request: Request):
+    return _homed_response(await request.app.state.dish_esp.get_homed_azimuth())
+
+
+@router.get("/home/elevation")
+async def get_homed_elevation(request: Request):
+    return _homed_response(await request.app.state.dish_esp.get_homed_elevation())
+
+
+def _homed_response(status: dict | None) -> dict:
+    if status is None:
+        return {"connected": False, "homed": None, "error": None}
+    return {"connected": True, "homed": status["homed"], "error": status["error"]}
