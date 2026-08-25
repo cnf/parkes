@@ -28,6 +28,9 @@
       skyfield
       # FastAPI's file/form-upload parsing dependency (Firmware upload).
       python-multipart
+      # Talks the firmware's CR/CW config protocol directly over the
+      # EasyCommII USB-serial link -- see parkes/dish_esp/serial_client.py.
+      pyserial
     ]);
   };
 

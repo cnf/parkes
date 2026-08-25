@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     esptool_flash_mode: str = "dio"
     esptool_flash_freq: str = "80m"
     esptool_flash_size: str = "16MB"
+
+    # SerialDishEspClient (parkes/dish_esp/serial_client.py) talks the
+    # firmware's CR/CW config protocol directly over the same USB-serial
+    # link as EasyCommII, borrowing rotctld's port the same way the
+    # flasher does. Generous default: this board's native-USB Serial/JTAG
+    # peripheral has a known erratum causing multi-second reply latency
+    # (rotctld_timeout_ms/rotctld_retry below are tuned for the same
+    # reason), and a config exchange is a synchronous multi-line
+    # round-trip, not a single quick query.
+    dish_esp_serial_timeout_s: float = 5.0
+
     rotctld_host: str = "localhost"
     rotctld_port: int = 4533
     # What the managed daemon binds to (-T) -- a separate concern from

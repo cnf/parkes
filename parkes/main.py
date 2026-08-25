@@ -32,7 +32,7 @@ from parkes.api.status import router as status_router
 from parkes.api.tracking import router as tracking_router
 from parkes.api.weather import router as weather_router
 from parkes.config import settings
-from parkes.dish_esp.client import UnconfiguredDishEspClient
+from parkes.dish_esp.serial_client import SerialDishEspClient
 from parkes.infra_supervisor import InfraSupervisor
 from parkes.orchestrator import PassOrchestrator
 from parkes.preferences import preferences
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
     app.state.satnogs = SatnogsService()
     app.state.weather = WeatherService()
     app.state.flasher = FirmwareFlasher()
-    app.state.dish_esp = UnconfiguredDishEspClient()
+    app.state.dish_esp = SerialDishEspClient(app.state.infra)
     await app.state.sdr_arbiter.ensure_idle_state()
     yield
     tle_load_task.cancel()
