@@ -208,6 +208,10 @@ def _rotctld_command(prefs: dict) -> list[str]:
     # timeout=1000,retry=3, but that's specific to that device, not a
     # default every rotator should pay for.
     tuning = []
+    if prefs["rotctld_dtr_state"]:
+        tuning.append(f"dtr_state={prefs['rotctld_dtr_state']}")
+    if prefs["rotctld_rts_state"]:
+        tuning.append(f"rts_state={prefs['rotctld_rts_state']}")
     if prefs["rotctld_timeout_ms"] is not None:
         tuning.append(f"timeout={prefs['rotctld_timeout_ms']}")
     if prefs["rotctld_retry"] is not None:

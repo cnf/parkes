@@ -32,6 +32,12 @@
   // field there means "leave unchanged" and is just omitted from the payload.
   const NULLABLE_NUMERIC_FIELDS = new Set(["rotctld_timeout_ms", "rotctld_retry"]);
 
+  // Same "blank means clear back to unset" idea as NULLABLE_NUMERIC_FIELDS,
+  // for the DTR/RTS state <select>s -- their empty "Unset (device default)"
+  // option is unambiguous (unlike a blank numeric field), so it always
+  // means "clear," never "leave unchanged."
+  const NULLABLE_SELECT_FIELDS = new Set(["rotctld_dtr_state", "rotctld_rts_state"]);
+
   // Checkboxes: FormData omits an unchecked box entirely and stringifies a
   // checked one as "on", so these are read/written via .checked directly
   // rather than through the generic FormData loop below.
@@ -163,6 +169,8 @@
             continue; // otherwise: don't coerce a blank field to 0, leave unchanged
           }
           values[key] = Number(raw);
+        } else if (NULLABLE_SELECT_FIELDS.has(key) && raw === "") {
+          values[key] = null;
         } else {
           values[key] = raw;
         }

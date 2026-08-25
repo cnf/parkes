@@ -61,6 +61,8 @@ DEFAULTS: dict[str, Any] = {
     "rotator_device": settings.rotator_device,
     "rotctld_timeout_ms": settings.rotctld_timeout_ms,
     "rotctld_retry": settings.rotctld_retry,
+    "rotctld_dtr_state": settings.rotctld_dtr_state,
+    "rotctld_rts_state": settings.rotctld_rts_state,
     # Same idea for gpsd. Managed off by default -- most setups rely on the
     # system's own gpsd.service, which other things (e.g. chronyd) may also
     # use. See infra_supervisor.py.

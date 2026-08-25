@@ -55,6 +55,18 @@ class Settings(BaseSettings):
     rotator_device: str | None = None
     rotctld_timeout_ms: int | None = None
     rotctld_retry: int | None = None
+    # Hamlib's rot_open() defaults dtr_state/rts_state to "Unset", which
+    # takes the same code path as "OFF" -- ioctl(TIOCMBIC) clearing both
+    # lines on open. On this board that clear (on top of the Linux kernel
+    # already raising DTR by default on open()) is a transition the
+    # ESP32-S3's native-USB Serial/JTAG peripheral treats as a soft-reset
+    # trigger (confirmed via strace + testing against real hardware).
+    # Setting "ON" instead makes Hamlib raise (ioctl TIOCMBIS) to match
+    # what the kernel already did, rather than undo it -- no second
+    # transition, no reset. Opt-in, like timeout_ms/retry above: this is
+    # specific to this board, not a default every rotator should get.
+    rotctld_dtr_state: str | None = None
+    rotctld_rts_state: str | None = None
 
     # Observer location, used for az/el tracking math. Defaults to Antwerp,
     # Belgium -- the fallback used when observer_location_mode isn't

@@ -45,6 +45,8 @@ class UpdateSettingsRequest(BaseModel):
     rotator_device: str | None = None
     rotctld_timeout_ms: int | None = None
     rotctld_retry: int | None = None
+    rotctld_dtr_state: Literal["ON", "OFF"] | None = None
+    rotctld_rts_state: Literal["ON", "OFF"] | None = None
     gpsd_host: str | None = None
     gpsd_port: int | None = None
     gpsd_bind_host: str | None = None
@@ -62,7 +64,7 @@ class UpdateSettingsRequest(BaseModel):
 # as toggling soapy_remote_auto acts on SdrArbiter right away below.
 _INFRA_FIELDS = {
     "rotctld_bind_host", "rotctld_port", "rotctld_managed", "rotator_model", "rotator_device",
-    "rotctld_timeout_ms", "rotctld_retry",
+    "rotctld_timeout_ms", "rotctld_retry", "rotctld_dtr_state", "rotctld_rts_state",
     "gpsd_bind_host", "gpsd_port", "gpsd_managed", "gpsd_device",
 }
 # Only the *connect* address matters to the clients Parkes itself uses --

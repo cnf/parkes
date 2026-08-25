@@ -93,7 +93,10 @@
         app</em> connects; "Bind address" only matters when Managed is on -- it's what interface
         the daemon Parkes spawns listens on. Set it to <code>0.0.0.0</code> to let other rotctld
         clients (e.g. gpredict on a laptop) reach it over the LAN while Host stays
-        <code>localhost</code> for Parkes's own connection.
+        <code>localhost</code> for Parkes's own connection. DTR/RTS state: rotctld defaults to
+        clearing both on open, which on some native-USB boards (e.g. this project's ESP32-S3
+        EasyCommII board) is a transition the chip treats as a reset trigger -- setting "ON" makes
+        it raise instead, matching what the OS already did on open rather than undoing it.
       </p>
       <form id="rotator-form">
         <div class="settings-grid">
@@ -104,6 +107,20 @@
           <label>Serial device <input name="rotator_device" type="text" placeholder="/dev/ttyACM0" /></label>
           <label>Read timeout (ms) <input name="rotctld_timeout_ms" type="number" step="1" min="1" placeholder="device default" /></label>
           <label>Retries <input name="rotctld_retry" type="number" step="1" min="0" placeholder="device default" /></label>
+          <label>DTR state
+            <select name="rotctld_dtr_state">
+              <option value="">Unset (device default)</option>
+              <option value="ON">ON</option>
+              <option value="OFF">OFF</option>
+            </select>
+          </label>
+          <label>RTS state
+            <select name="rotctld_rts_state">
+              <option value="">Unset (device default)</option>
+              <option value="ON">ON</option>
+              <option value="OFF">OFF</option>
+            </select>
+          </label>
         </div>
         <button type="submit" class="primary" style="margin-top: 0.8rem;">Save rotator settings</button>
         <span id="rotator-form-status" style="color: var(--text-muted); font-size: 0.85rem; margin-left: 0.6rem;"></span>
