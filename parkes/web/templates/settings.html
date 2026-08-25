@@ -38,6 +38,15 @@
       .dish-esp-vector-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
       .dish-esp-vector-item span { flex: 1; word-break: break-all; }
       .dish-esp-vector-add { display: flex; gap: 0.4rem; }
+
+      .info-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 1.15rem; height: 1.15rem; border-radius: 50%; border: none;
+        background: none; color: var(--text-muted); cursor: pointer;
+        font-size: 0.95rem; line-height: 1; padding: 0; margin-left: 0.3rem;
+        vertical-align: middle;
+      }
+      .info-btn:hover, .info-btn:focus-visible { color: var(--accent); }
     </style>
 {% endblock %}
 
@@ -79,7 +88,7 @@
     <section class="card">
       <div class="card-header">
         <div class="card-header-title">
-          <h2>Rotator (rotctld)</h2>
+          <h2>Rotator (rotctld) <button type="button" class="info-btn" data-info-target="rotator-info" aria-label="More info">&#9432;</button></h2>
           <label class="managed-toggle">
             <input name="rotctld_managed" type="checkbox" form="rotator-form" style="width: auto; accent-color: var(--accent);" />
             Managed by Parkes
@@ -87,7 +96,7 @@
         </div>
         <span class="status-pill"><span class="status-dot" id="rotator-mgmt-dot"></span><span id="rotator-mgmt-status"></span></span>
       </div>
-      <p class="hint">
+      <p class="hint" id="rotator-info" hidden>
         Parkes starts and supervises rotctld itself when "Managed" is on. Model list comes from
         <code>rotctl -l</code> on this machine's Hamlib install. "Host" is always where <em>this
         app</em> connects; "Bind address" only matters when Managed is on -- it's what interface
@@ -129,9 +138,9 @@
 
     <section class="card">
       <div class="card-header">
-        <h2>Firmware (ESP32)</h2>
+        <h2>Firmware (ESP32) <button type="button" class="info-btn" data-info-target="flash-info" aria-label="More info">&#9432;</button></h2>
       </div>
-      <p class="hint">
+      <p class="hint" id="flash-info" hidden>
         Updates the EasyCommII board's app firmware over its USB serial connection. Build
         DishControll, then select the app image (e.g. <code>Arecibo.bin</code>, from its
         <code>build/</code> output) below -- only the app partition is rewritten, not the
@@ -152,10 +161,10 @@
 
     <section class="card">
       <div class="card-header">
-        <h2>Arecibo</h2>
+        <h2>Arecibo <button type="button" class="info-btn" data-info-target="arecibo-info" aria-label="More info">&#9432;</button></h2>
         <span class="status-pill"><span class="status-dot" id="dish-esp-dot"></span><span id="dish-esp-status"></span></span>
       </div>
-      <p class="hint">
+      <p class="hint" id="arecibo-info" hidden>
         Firmware calibration/limit settings, read and written directly on the board's NVS storage
         over the same USB-serial link EasyComm/rotctld use. rotctld is paused while this is
         actively in use, and handed back automatically about 30s after the last read/write here --
@@ -181,7 +190,7 @@
     <section class="card">
       <div class="card-header">
         <div class="card-header-title">
-          <h2>GPS (gpsd)</h2>
+          <h2>GPS (gpsd) <button type="button" class="info-btn" data-info-target="gpsd-info" aria-label="More info">&#9432;</button></h2>
           <label class="managed-toggle">
             <input name="gpsd_managed" type="checkbox" form="gpsd-form" style="width: auto; accent-color: var(--accent);" />
             Managed by Parkes
@@ -189,7 +198,7 @@
         </div>
         <span class="status-pill"><span class="status-dot" id="gpsd-mgmt-dot"></span><span id="gpsd-mgmt-status"></span></span>
       </div>
-      <p class="hint">
+      <p class="hint" id="gpsd-info" hidden>
         Off by default -- most setups rely on the system's own gpsd.service, which other things
         (like chrony) may also use. Only turn "Managed" on for a Pi where Parkes is the sole gpsd
         consumer. "Host" is always where <em>this app</em> connects; "Bind address" only matters
@@ -218,8 +227,8 @@
 
     <section class="card">
       <details open>
-        <summary>TLE Sources</summary>
-        <p class="hint">
+        <summary>TLE Sources <button type="button" class="info-btn" data-info-target="tle-info" aria-label="More info">&#9432;</button></summary>
+        <p class="hint" id="tle-info" hidden>
           Any URL serving a TLE-formatted file (Celestrak group queries, AMSAT, a custom list...).
           Adding a source only makes its satellites appear on the Satellites page -- assigning them
           into groups is a separate step there.

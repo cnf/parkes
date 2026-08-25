@@ -200,6 +200,20 @@
   wireForm(rotatorForm, rotatorStatusEl);
   wireForm(gpsdForm, gpsdStatusEl);
 
+  // Collapses the long section-level explainer paragraphs behind an info
+  // icon next to the heading -- some of these sit inside a <summary> (TLE
+  // Sources), whose own default click behavior (toggling the enclosing
+  // <details>) needs suppressing so clicking the icon doesn't also
+  // collapse the whole section.
+  document.querySelectorAll(".info-btn").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = document.getElementById(btn.dataset.infoTarget);
+      if (target) target.hidden = !target.hidden;
+    });
+  });
+
   (async () => {
     await populateModelOptions(); // must exist before loadAll() sets a value
     await loadAll();
