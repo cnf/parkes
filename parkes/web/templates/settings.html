@@ -140,8 +140,10 @@
       </div>
       <p class="hint">
         Firmware calibration/limit settings, read and written directly on the board's NVS storage
-        over the same USB-serial link EasyComm/rotctld use (rotctld is paused for the duration of
-        each read/write, same as flashing).
+        over the same USB-serial link EasyComm/rotctld use. rotctld is paused while this is
+        actively in use, and handed back automatically about 30s after the last read/write here --
+        opening the serial port resets the board, so it's held open across a burst of activity
+        rather than reopened (and the board reset) on every single call.
       </p>
       <div class="row">
         <span class="status-pill"><span class="status-dot" id="dish-esp-az-homed-dot"></span><span id="dish-esp-az-homed-status">--</span></span>

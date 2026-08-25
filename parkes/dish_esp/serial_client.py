@@ -10,6 +10,10 @@ from parkes.preferences import preferences
 # (confirmed in earlier project sessions) -- any conventional value works.
 _BAUD = 115200
 
+# How long to keep the port open (and rotctld paused) after the last
+# exchange before handing it back -- see _release_after_idle.
+_IDLE_RELEASE_S = 30.0
+
 # CR<ns>.<key> -> "kInt"/"kDouble"/... (easycomm.cpp's ConfigValueTypeToString)
 # normalized to what the Settings page's dish-esp-settings.js already
 # compares against (type.toLowerCase() === "int"/"double"/"bool"/"vector").
@@ -50,9 +54,34 @@ class SerialDishEspClient:
     """Talks the firmware's EasyComm-extension commands (CR/CW config,
     VE version, HA/HE/HANOW/HENOW homing -- components/EasyComm/
     easycomm.cpp in DishControll) directly over the same USB-serial link
-    EasyCommII/rotctld already use. Stops/restarts rotctld around each
-    exchange the same way FirmwareFlasher does (parkes/rotator/flasher.py)
-    -- there's only one physical port, and rotctld normally owns it.
+    EasyCommII/rotctld already use.
+
+    Holds one persistent connection across exchanges rather than opening
+    a fresh one each time: opening this board's port resets the ESP32-S3.
+    Confirmed by stracing a real rotctld against a test port: its
+    EasyCommII backend unconditionally calls ioctl(TIOCMBIC, DTR) and
+    ioctl(TIOCMBIC, RTS) right after open() -- present even with
+    `-C dtr_state=OFF,rts_state=OFF` set, so it's not something a Hamlib
+    config token can suppress. This board's native-USB Serial/JTAG
+    peripheral treats that DTR/RTS control-line change as a soft-reset
+    trigger (the same convention esptool's `--before default_reset` uses
+    over native USB -- a ROM/silicon feature of this USB peripheral, not
+    contingent on any physical DTR/RTS-to-EN wiring, which revB doesn't
+    have). So every rotctld (re)connection resets the board, full stop --
+    reopening/restarting around every single call, as an earlier version
+    of this client did, sandwiched every exchange between two resets,
+    silently wiping any firmware-side state that doesn't survive reboot.
+
+    Holding one connection open and only handing rotctld back after
+    _IDLE_RELEASE_S of inactivity reduces resets to one per burst of use
+    instead of one per call -- but it does NOT make transient
+    firmware-side state (e.g. homed-status, if it's tracked as steps
+    counted since a reference point rather than read fresh off a
+    physical sensor) safe to trust once rotctld reconnects and tracking
+    resumes. That reset is unavoidable -- there's no timing/sequencing
+    fix for it -- so a value like "homed" is only ever reliable within
+    the same connection that established it, never as a standing fact
+    Parkes can keep showing afterward.
 
     Metadata (type/unit/format) is cached in-process: it's fixed per
     ConfigEntry and there's no bulk metadata dump, only one CR?<ns>.<key>
@@ -64,28 +93,87 @@ class SerialDishEspClient:
     def __init__(self, infra: InfraSupervisor):
         self._infra = infra
         self._metadata_cache: dict[str, dict] = {}  # "ns.key" -> {"type","unit","format"}
-        # Every exchange borrows the one physical port from rotctld --
-        # without this, concurrent calls (e.g. the Settings page's
-        # config/version/home-status fetches, which fire in parallel)
-        # race on stop_daemon/start_daemon and can crash rotctld
-        # (confirmed: "RuntimeError: process is already running" from
-        # two overlapping restarts). Serializing here is correct anyway,
-        # not just a workaround -- it's a single serial port, exchanges
-        # were never actually concurrent-safe.
+        # Guards _ser/_release_task -- also fixes a real bug found in
+        # testing: concurrent calls (the Settings page's config/version/
+        # home-status fetches, which fire in parallel) raced on
+        # stop_daemon/start_daemon and crashed rotctld ("RuntimeError:
+        # process is already running"). Correct regardless of that,
+        # since there's only one physical port.
         self._lock = asyncio.Lock()
+        self._ser: serial.Serial | None = None
+        self._release_task: asyncio.Task | None = None
 
     def _device(self) -> str | None:
         return preferences.get_all()["rotator_device"]
+
+    def _open_locked(self) -> serial.Serial | None:
+        # Call only with self._lock held. Reuses the existing connection
+        # if it's still open and pointed at the currently-configured
+        # device; otherwise (re)opens -- see the class docstring for why
+        # minimizing opens matters here.
+        device = self._device()
+        if not device:
+            return None
+        if self._ser is not None:
+            if self._ser.port == device and self._ser.is_open:
+                return self._ser
+            self._close_locked()
+        try:
+            self._ser = serial.Serial(device, _BAUD, timeout=settings.dish_esp_serial_timeout_s)
+            return self._ser
+        except (serial.SerialException, OSError):
+            self._ser = None
+            return None
+
+    def _close_locked(self) -> None:
+        if self._ser is not None:
+            try:
+                self._ser.close()
+            except (serial.SerialException, OSError):
+                pass
+            self._ser = None
+
+    def _run_locked(self, sync_fn, args, default):
+        # Runs in a worker thread (via asyncio.to_thread) while the
+        # caller holds self._lock for the whole exchange, so mutating
+        # self._ser here is safe -- no other call can be in this method
+        # at the same time.
+        ser = self._open_locked()
+        if ser is None:
+            return default
+        try:
+            return sync_fn(ser, *args)
+        except (serial.SerialException, OSError):
+            self._close_locked()
+            return default
+
+    async def _release_after_idle(self) -> None:
+        try:
+            await asyncio.sleep(_IDLE_RELEASE_S)
+        except asyncio.CancelledError:
+            return
+        async with self._lock:
+            self._close_locked()
+            await self._infra.start_daemon("rotctld")
+            self._release_task = None
 
     async def _exchange(self, sync_fn, *args, default=None):
         if not self._device():
             return default
         async with self._lock:
-            await self._infra.stop_daemon("rotctld")
+            if self._release_task is not None:
+                self._release_task.cancel()
+                self._release_task = None
+            if self._ser is None:
+                await self._infra.stop_daemon("rotctld")
             try:
-                return await asyncio.to_thread(sync_fn, *args)
-            finally:
+                result = await asyncio.to_thread(self._run_locked, sync_fn, args, default)
+            except Exception:
+                self._close_locked()
                 await self._infra.start_daemon("rotctld")
+                raise
+            self._release_task = asyncio.create_task(self._release_after_idle())
+            return result
 
     def _send_and_read(self, ser: serial.Serial, command: str, terminator: str | None) -> list[str]:
         ser.reset_input_buffer()
@@ -123,79 +211,49 @@ class SerialDishEspClient:
         self._metadata_cache[cache_key] = meta
         return meta
 
-    def _get_config_sync(self) -> list[dict] | None:
-        device = self._device()
-        if not device:
-            return None
-        try:
-            with serial.Serial(device, _BAUD, timeout=settings.dish_esp_serial_timeout_s) as ser:
-                value_lines = self._send_and_read(ser, "CR*", terminator="CREND")
-                namespaces: dict[str, list[dict]] = {}
-                for line in value_lines:
-                    if line == "CREND" or not line.startswith("CR") or "=" not in line:
-                        continue
-                    ns_key, value = line[2:].split("=", 1)
-                    if "." not in ns_key:
-                        continue
-                    namespace, key = ns_key.split(".", 1)
-                    meta = self._fetch_metadata(ser, namespace, key)
-                    namespaces.setdefault(namespace, []).append({
-                        "key": key,
-                        "description": key,  # not available over this transport
-                        "value": _coerce_value(meta["type"], value),
-                        **meta,
-                    })
-                return [
-                    {"namespace": ns, "entries": entries} for ns, entries in namespaces.items()
-                ]
-        except (serial.SerialException, OSError):
-            return None
+    def _get_config_sync(self, ser: serial.Serial) -> list[dict]:
+        value_lines = self._send_and_read(ser, "CR*", terminator="CREND")
+        namespaces: dict[str, list[dict]] = {}
+        for line in value_lines:
+            if line == "CREND" or not line.startswith("CR") or "=" not in line:
+                continue
+            ns_key, value = line[2:].split("=", 1)
+            if "." not in ns_key:
+                continue
+            namespace, key = ns_key.split(".", 1)
+            meta = self._fetch_metadata(ser, namespace, key)
+            namespaces.setdefault(namespace, []).append({
+                "key": key,
+                "description": key,  # not available over this transport
+                "value": _coerce_value(meta["type"], value),
+                **meta,
+            })
+        return [{"namespace": ns, "entries": entries} for ns, entries in namespaces.items()]
 
-    def _set_config_sync(self, namespace: str, key: str, value) -> bool:
-        device = self._device()
-        if not device:
-            return False
-        try:
-            with serial.Serial(device, _BAUD, timeout=settings.dish_esp_serial_timeout_s) as ser:
-                prefix = f"CW{namespace}.{key}="
-                reply = self._send_and_read(ser, f"{prefix}{value}", terminator=None)
-                return bool(reply) and reply[0].startswith(prefix)
-        except (serial.SerialException, OSError):
-            return False
+    def _set_config_sync(self, ser: serial.Serial, namespace: str, key: str, value) -> bool:
+        prefix = f"CW{namespace}.{key}="
+        reply = self._send_and_read(ser, f"{prefix}{value}", terminator=None)
+        return bool(reply) and reply[0].startswith(prefix)
 
-    def _get_version_sync(self) -> str | None:
-        device = self._device()
-        if not device:
-            return None
-        try:
-            with serial.Serial(device, _BAUD, timeout=settings.dish_esp_serial_timeout_s) as ser:
-                reply = self._send_and_read(ser, "VE", terminator=None)
-                if reply and reply[0].startswith("VE"):
-                    return reply[0][2:]
-                return None
-        except (serial.SerialException, OSError):
-            return None
+    def _get_version_sync(self, ser: serial.Serial) -> str | None:
+        reply = self._send_and_read(ser, "VE", terminator=None)
+        if reply and reply[0].startswith("VE"):
+            return reply[0][2:]
+        return None
 
-    def _send_home_sync(self, command: str) -> bool:
+    def _send_home_sync(self, ser: serial.Serial, command: str) -> bool:
         # HANOW/HENOW (home_azimuth/home_elevation) don't send a reply at
         # all -- so this only confirms the command was written, not that
         # homing completed or even started successfully. No point waiting
         # on readline() for a reply that will never come. Deliberately
         # separate from bare HA/HE (see _get_homed_sync) so a "let's see
         # what this does" query can never itself move the dish.
-        device = self._device()
-        if not device:
-            return False
-        try:
-            with serial.Serial(device, _BAUD, timeout=settings.dish_esp_serial_timeout_s) as ser:
-                ser.reset_input_buffer()
-                ser.write((command + "\r").encode())
-                ser.flush()
-                return True
-        except (serial.SerialException, OSError):
-            return False
+        ser.reset_input_buffer()
+        ser.write((command + "\r").encode())
+        ser.flush()
+        return True
 
-    def _get_homed_sync(self, command: str) -> dict | None:
+    def _get_homed_sync(self, ser: serial.Serial, command: str) -> dict | None:
         # Bare HA/HE report whether that axis is *currently in a known-
         # homed position* (a standing calibration fact) -- distinct from
         # GS's transient "is it actively homing right now" bit. Replies
@@ -203,31 +261,24 @@ class SerialDishEspClient:
         # itself doesn't know, and a same-exchange GE follow-up gives the
         # error bitfield (1=Sensor Error, 2=Jam, 4=Homing Error) that may
         # explain why.
-        device = self._device()
-        if not device:
+        reply = self._send_and_read(ser, command, terminator=None)
+        if not reply or not reply[0].startswith(command):
             return None
-        try:
-            with serial.Serial(device, _BAUD, timeout=settings.dish_esp_serial_timeout_s) as ser:
-                reply = self._send_and_read(ser, command, terminator=None)
-                if not reply or not reply[0].startswith(command):
-                    return None
-                value = reply[0][len(command):]
-                if value == "1":
-                    return {"homed": True, "error": None}
-                if value == "0":
-                    return {"homed": False, "error": None}
-                if value == "?":
-                    error_reply = self._send_and_read(ser, "GE", terminator=None)
+        value = reply[0][len(command):]
+        if value == "1":
+            return {"homed": True, "error": None}
+        if value == "0":
+            return {"homed": False, "error": None}
+        if value == "?":
+            error_reply = self._send_and_read(ser, "GE", terminator=None)
+            error = None
+            if error_reply and error_reply[0].startswith("GE"):
+                try:
+                    error = int(error_reply[0][2:])
+                except ValueError:
                     error = None
-                    if error_reply and error_reply[0].startswith("GE"):
-                        try:
-                            error = int(error_reply[0][2:])
-                        except ValueError:
-                            error = None
-                    return {"homed": None, "error": error}
-                return None
-        except (serial.SerialException, OSError):
-            return None
+            return {"homed": None, "error": error}
+        return None
 
     async def get_config(self) -> list[dict] | None:
         return await self._exchange(self._get_config_sync)
@@ -254,3 +305,16 @@ class SerialDishEspClient:
 
     async def get_homed_elevation(self) -> dict | None:
         return await self._exchange(self._get_homed_sync, "HE")
+
+    async def close(self) -> None:
+        """Releases the port and hands rotctld back, if currently held --
+        called on app shutdown so a mid-idle-window hold doesn't leave
+        rotctld paused after Parkes exits.
+        """
+        async with self._lock:
+            if self._release_task is not None:
+                self._release_task.cancel()
+                self._release_task = None
+            if self._ser is not None:
+                self._close_locked()
+                await self._infra.start_daemon("rotctld")

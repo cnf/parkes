@@ -111,6 +111,7 @@ async def lifespan(app: FastAPI):
     await app.state.orchestrator.stop()
     await app.state.standalone_apps.stop_timer()
     await app.state.flasher.stop()
+    await app.state.dish_esp.close()
     await app.state.rotator.close()
     await app.state.gpsd.stop()
     await app.state.infra.stop()
