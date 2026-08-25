@@ -7,16 +7,25 @@
       .hint { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1rem; }
       .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.8rem; }
       .table-scroll { overflow-x: auto; }
+
+      .info-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 1.15rem; height: 1.15rem; border-radius: 50%; border: none;
+        background: none; color: var(--text-muted); cursor: pointer;
+        font-size: 0.95rem; line-height: 1; padding: 0; margin-left: 0.3rem;
+        vertical-align: middle;
+      }
+      .info-btn:hover, .info-btn:focus-visible { color: var(--accent); }
     </style>
 {% endblock %}
 
 {% block content %}
     <section class="card">
       <div class="card-header">
-        <h2>SDR Devices</h2>
+        <h2>SDR Devices <button type="button" class="info-btn" data-info-target="devices-info" aria-label="More info">&#9432;</button></h2>
         <span id="devices-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
       </div>
-      <p class="hint">
+      <p class="hint" id="devices-info" hidden>
         Detected via SoapySDR. Label a device to tell a HackRF and an RTL-SDR apart -- pick one
         below as the active <code>{source}</code>/<code>{source_id}</code> for app profiles. The
         connect strings are what other SoapySDR-based software (gqrx, SDR++, GNU Radio) needs:
@@ -36,10 +45,10 @@
 
     <section class="card">
       <div class="card-header">
-        <h2>SDR Source</h2>
+        <h2>SDR Source <button type="button" class="info-btn" data-info-target="sdr-source-info" aria-label="More info">&#9432;</button></h2>
         <span id="sdr-source-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
       </div>
-      <p class="hint">
+      <p class="hint" id="sdr-source-info" hidden>
         The device and sample rate app profiles get via the <code>{source}</code>/
         <code>{source_id}</code>/<code>{samplerate}</code> command placeholders.
       </p>
@@ -61,7 +70,7 @@
     <section class="card">
       <div class="card-header">
         <div class="card-header-title">
-          <h2>SDR Network Sharing</h2>
+          <h2>SDR Network Sharing <button type="button" class="info-btn" data-info-target="sdr-sharing-info" aria-label="More info">&#9432;</button></h2>
           <label class="managed-toggle">
             <input id="sdr-auto-toggle" type="checkbox" style="width: auto; accent-color: var(--accent);" />
             Auto-manage
@@ -69,7 +78,7 @@
         </div>
         <span class="status-pill"><span class="status-dot" id="sdr-dot"></span><span id="sdr-status"></span></span>
       </div>
-      <p class="hint">
+      <p class="hint" id="sdr-sharing-info" hidden>
         Exposes the local SDR over the network via SoapyRemote, so gpredict/gqrx/a laptop-side
         satdump can use it directly. Mutually exclusive with local app profiles that need the SDR
         -- only one can hold the physical device at a time. With Auto-manage on, sharing releases

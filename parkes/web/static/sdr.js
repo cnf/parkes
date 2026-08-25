@@ -278,4 +278,15 @@
   loadSourcePrefs();
   refreshStatus();
   setInterval(refreshStatus, 5000);
+
+  // Collapses the long section-level explainer paragraphs behind an info
+  // icon next to each heading -- same convention as the Settings page.
+  document.querySelectorAll(".info-btn").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = document.getElementById(btn.dataset.infoTarget);
+      if (target) target.hidden = !target.hidden;
+    });
+  });
 })();
