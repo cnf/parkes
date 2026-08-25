@@ -143,6 +143,38 @@ class SerialDishEspClient:
         except (serial.SerialException, OSError):
             return False
 
+    def _get_version_sync(self) -> str | None:
+        device = self._device()
+        if not device:
+            return None
+        try:
+            with serial.Serial(device, _BAUD, timeout=settings.dish_esp_serial_timeout_s) as ser:
+                reply = self._send_and_read(ser, "VE", terminator=None)
+                if reply and reply[0].startswith("VE"):
+                    return reply[0][2:]
+                return None
+        except (serial.SerialException, OSError):
+            return None
+
+    def _send_home_sync(self, command: str) -> bool:
+        # HA/HE (home_azimuth/home_elevation) don't send a reply at all
+        # (EasyComm::HomingAzimuthCallback/HomingElevationCallback just
+        # publish a pubsub topic, no Reply() call) -- so this only
+        # confirms the command was written, not that homing completed or
+        # even started successfully. No point waiting on readline() for a
+        # reply that will never come.
+        device = self._device()
+        if not device:
+            return False
+        try:
+            with serial.Serial(device, _BAUD, timeout=settings.dish_esp_serial_timeout_s) as ser:
+                ser.reset_input_buffer()
+                ser.write((command + "\r").encode())
+                ser.flush()
+                return True
+        except (serial.SerialException, OSError):
+            return False
+
     async def get_config(self) -> list[dict] | None:
         # Checked before touching rotctld at all -- otherwise an
         # unconfigured device would still bounce rotctld (and the board,
@@ -168,3 +200,27 @@ class SerialDishEspClient:
         # The firmware itself rejects vector writes over EasyComm today
         # (CWERR5) -- nothing to attempt.
         return False
+
+    async def get_version(self) -> str | None:
+        if not self._device():
+            return None
+        await self._infra.stop_daemon("rotctld")
+        try:
+            return await asyncio.to_thread(self._get_version_sync)
+        finally:
+            await self._infra.start_daemon("rotctld")
+
+    async def home_azimuth(self) -> bool:
+        return await self._send_home("HA")
+
+    async def home_elevation(self) -> bool:
+        return await self._send_home("HE")
+
+    async def _send_home(self, command: str) -> bool:
+        if not self._device():
+            return False
+        await self._infra.stop_daemon("rotctld")
+        try:
+            return await asyncio.to_thread(self._send_home_sync, command)
+        finally:
+            await self._infra.start_daemon("rotctld")

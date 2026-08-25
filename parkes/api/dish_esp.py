@@ -46,3 +46,25 @@ async def set_config_vector(body: SetConfigVectorRequest, request: Request):
     if not ok:
         raise HTTPException(502, "ESP unreachable or rejected the change")
     return {"status": "ok"}
+
+
+@router.get("/version")
+async def get_version(request: Request):
+    version = await request.app.state.dish_esp.get_version()
+    return {"connected": version is not None, "version": version}
+
+
+@router.post("/home/azimuth")
+async def home_azimuth(request: Request):
+    # True only means the command was sent -- the firmware doesn't report
+    # homing status yet (see dish_esp/client.py).
+    if not await request.app.state.dish_esp.home_azimuth():
+        raise HTTPException(502, "ESP unreachable")
+    return {"status": "sent"}
+
+
+@router.post("/home/elevation")
+async def home_elevation(request: Request):
+    if not await request.app.state.dish_esp.home_elevation():
+        raise HTTPException(502, "ESP unreachable")
+    return {"status": "sent"}

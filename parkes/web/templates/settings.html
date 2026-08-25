@@ -139,11 +139,18 @@
         <span class="status-pill"><span class="status-dot" id="dish-esp-dot"></span><span id="dish-esp-status"></span></span>
       </div>
       <p class="hint">
-        Firmware calibration/limit settings, read and written directly on the board's NVS storage.
-        Not reachable yet -- no transport is wired up between Parkes and the board for this (its
-        own Wi-Fi access point works today, but was ruled out to avoid an extra radio next to the
-        SDR front end; a serial protocol sharing the same USB link as EasyComm is the likely
-        answer, but doesn't exist in the firmware yet).
+        Firmware calibration/limit settings, read and written directly on the board's NVS storage
+        over the same USB-serial link EasyComm/rotctld use (rotctld is paused for the duration of
+        each read/write, same as flashing).
+      </p>
+      <div class="row">
+        <button id="dish-esp-home-az-btn" type="button" class="btn-sm">Home Azimuth</button>
+        <button id="dish-esp-home-el-btn" type="button" class="btn-sm">Home Elevation</button>
+        <span id="dish-esp-home-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+      </div>
+      <p class="hint" style="margin-top: 0.4rem;">
+        These only confirm the command was sent, not that homing finished -- the firmware doesn't
+        report homing status yet.
       </p>
       <div id="dish-esp-namespaces"></div>
     </section>

@@ -1,15 +1,13 @@
 (() => {
   // Renders whatever GET /api/dish/config reports -- Parkes doesn't know
   // the ESP's specific setting names, it just renders namespaces/entries
-  // generically by type. Untestable against a real device until a
-  // transport exists (see parkes/dish_esp/client.py) -- built carefully
-  // against the documented /api/config contract, but the exact wire
-  // values for "type" (int/double/bool/string/vector?) and how vector
-  // values are actually JSON-encoded haven't been observed live yet, so
-  // this is defensive about both.
+  // generically by type.
   const dotEl = document.getElementById("dish-esp-dot");
   const statusEl = document.getElementById("dish-esp-status");
   const container = document.getElementById("dish-esp-namespaces");
+  const homeAzBtn = document.getElementById("dish-esp-home-az-btn");
+  const homeElBtn = document.getElementById("dish-esp-home-el-btn");
+  const homeStatusEl = document.getElementById("dish-esp-home-status");
 
   function setDot(ok, onText, offText) {
     dotEl.classList.toggle("on", ok === true);
@@ -154,8 +152,9 @@
       : renderScalarEntry(namespace, entry, type, labelText, unitHint);
   }
 
-  function render(data) {
-    setDot(data.connected ? true : null, "connected", "not connected yet");
+  function render(data, version) {
+    const connectedText = version ? `connected -- ${version}` : "connected";
+    setDot(data.connected ? true : null, connectedText, "not connected yet");
     container.innerHTML = "";
     for (const ns of data.namespaces) {
       const section = document.createElement("div");
@@ -173,13 +172,32 @@
 
   async function refresh() {
     try {
-      const res = await fetch("/api/dish/config");
-      const data = await res.json();
-      render(data);
+      const [configRes, versionRes] = await Promise.all([
+        fetch("/api/dish/config"),
+        fetch("/api/dish/version"),
+      ]);
+      const data = await configRes.json();
+      const versionData = await versionRes.json();
+      render(data, versionData.version);
     } catch {
       setDot(false, "", "unreachable");
     }
   }
+
+  function wireHomeButton(btn, path) {
+    btn.addEventListener("click", async () => {
+      homeStatusEl.textContent = "";
+      try {
+        await postJson(path, {});
+        homeStatusEl.textContent = "sent";
+        setTimeout(() => { homeStatusEl.textContent = ""; }, 2000);
+      } catch (err) {
+        homeStatusEl.textContent = `error: ${err.message}`;
+      }
+    });
+  }
+  wireHomeButton(homeAzBtn, "/api/dish/home/azimuth");
+  wireHomeButton(homeElBtn, "/api/dish/home/elevation");
 
   refresh();
 })();
