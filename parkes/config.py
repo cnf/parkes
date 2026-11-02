@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     rotctld_managed: bool = True
     rotator_model: int = 1
     rotator_device: str | None = None
+    # Serial baud (-s). Unset lets Hamlib use the backend's own max
+    # (EasyComm: 19200), which a 115200 hardware-UART board won't answer.
+    rotctld_serial_speed: int | None = None
     rotctld_timeout_ms: int | None = None
     rotctld_retry: int | None = None
     # Hamlib's rot_open() defaults dtr_state/rts_state to "Unset", which

@@ -20,6 +20,7 @@
     "orchestrator_min_elevation",
     "rotctld_port",
     "rotator_model",
+    "rotctld_serial_speed",
     "rotctld_timeout_ms",
     "rotctld_retry",
     "gpsd_port",
@@ -30,7 +31,7 @@
   // field here means "clear it back to unset," so it's sent as an explicit
   // null. Every other numeric field always has a real default, so a blank
   // field there means "leave unchanged" and is just omitted from the payload.
-  const NULLABLE_NUMERIC_FIELDS = new Set(["rotctld_timeout_ms", "rotctld_retry"]);
+  const NULLABLE_NUMERIC_FIELDS = new Set(["rotctld_serial_speed", "rotctld_timeout_ms", "rotctld_retry"]);
 
   // Same "blank means clear back to unset" idea as NULLABLE_NUMERIC_FIELDS,
   // for the DTR/RTS state <select>s -- their empty "Unset (device default)"

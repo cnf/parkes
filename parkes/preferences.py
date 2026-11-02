@@ -59,6 +59,7 @@ DEFAULTS: dict[str, Any] = {
     "rotctld_managed": settings.rotctld_managed,
     "rotator_model": settings.rotator_model,
     "rotator_device": settings.rotator_device,
+    "rotctld_serial_speed": settings.rotctld_serial_speed,
     "rotctld_timeout_ms": settings.rotctld_timeout_ms,
     "rotctld_retry": settings.rotctld_retry,
     "rotctld_dtr_state": settings.rotctld_dtr_state,

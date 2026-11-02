@@ -204,6 +204,8 @@ def _rotctld_command(prefs: dict) -> list[str]:
     ]
     if prefs["rotator_device"]:
         command += ["-r", prefs["rotator_device"]]
+    if prefs["rotctld_serial_speed"] is not None:
+        command += ["-s", str(prefs["rotctld_serial_speed"])]
     # Opt-in only -- e.g. the EasyCommII board's ESP32-S3 USB erratum needs
     # timeout=1000,retry=3, but that's specific to that device, not a
     # default every rotator should pay for.
